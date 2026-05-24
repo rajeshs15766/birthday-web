@@ -2330,7 +2330,7 @@ function WebsiteContent({ setViewMode }) {
           <div className="text-center mb-12">
             <p className="text-pink-400 text-xs font-extrabold tracking-[5px] uppercase mb-3">Birthday Wall</p>
             <h2 className="text-4xl md:text-5xl font-bold text-white tracking-wide" style={{ fontFamily: 'Playfair Display' }}>
-              Wishes From Friends 💝
+              Make a Wish 💝
             </h2>
           </div>
 
