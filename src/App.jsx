@@ -453,8 +453,8 @@ function WishesWall({ logActivity }) {
     };
 
     // Supabase cloud sync
-    const sUrl = localStorage.getItem('supabase-url');
-    const sKey = localStorage.getItem('supabase-key');
+    const sUrl = localStorage.getItem('supabase-url') || DEFAULT_SUPABASE_URL;
+    const sKey = localStorage.getItem('supabase-key') || DEFAULT_SUPABASE_KEY;
     if (sUrl && sKey) {
       fetch(`${sUrl}/rest/v1/birthday_data`, {
         method: 'POST',
@@ -630,8 +630,8 @@ function MemoryQuiz({ questions = defaultQuestions, logActivity }) {
       localStorage.setItem('birthday-quiz-attempts', JSON.stringify([...quizAttempts, newAttempt]));
 
       // Supabase cloud sync
-      const sUrl = localStorage.getItem('supabase-url');
-      const sKey = localStorage.getItem('supabase-key');
+      const sUrl = localStorage.getItem('supabase-url') || DEFAULT_SUPABASE_URL;
+      const sKey = localStorage.getItem('supabase-key') || DEFAULT_SUPABASE_KEY;
       if (sUrl && sKey) {
         fetch(`${sUrl}/rest/v1/birthday_data`, {
           method: 'POST',
@@ -958,8 +958,8 @@ function VoiceMessage({ logActivity, onRecordStart }) {
       localStorage.setItem('birthday-voice-notes', JSON.stringify(updatedNotes));
 
       // Supabase cloud sync
-      const sUrl = localStorage.getItem('supabase-url');
-      const sKey = localStorage.getItem('supabase-key');
+      const sUrl = localStorage.getItem('supabase-url') || DEFAULT_SUPABASE_URL;
+      const sKey = localStorage.getItem('supabase-key') || DEFAULT_SUPABASE_KEY;
       if (sUrl && sKey) {
         fetch(`${sUrl}/rest/v1/birthday_data`, {
           method: 'POST',
@@ -1314,6 +1314,9 @@ const galleryPhotos = [
   }
 ];
 
+
+const DEFAULT_SUPABASE_URL = 'https://qisvrtkuzznmllfvdgdj.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_CpXOzfNo_ivz-s12Hi_1ug_pPROfVYF';
 
 export default function BirthdayWebsite() {
   const [viewMode, setViewMode] = useState('user'); // 'user' or 'dashboard'
@@ -1683,8 +1686,8 @@ function WebsiteContent({ setViewMode }) {
     if (savedQuestions) setQuizQuestions(JSON.parse(savedQuestions));
 
     // 2. Fetch live settings update directly from Supabase database
-    const sUrl = localStorage.getItem('supabase-url');
-    const sKey = localStorage.getItem('supabase-key');
+    const sUrl = localStorage.getItem('supabase-url') || DEFAULT_SUPABASE_URL;
+    const sKey = localStorage.getItem('supabase-key') || DEFAULT_SUPABASE_KEY;
     
     const loadSettings = () => {
       const sp = localStorage.getItem('birthday-gallery-photos');
@@ -1767,8 +1770,8 @@ function WebsiteContent({ setViewMode }) {
     localStorage.setItem('birthday-activity', JSON.stringify([newLog, ...logs]));
 
     // Supabase cloud sync
-    const sUrl = localStorage.getItem('supabase-url');
-    const sKey = localStorage.getItem('supabase-key');
+    const sUrl = localStorage.getItem('supabase-url') || DEFAULT_SUPABASE_URL;
+    const sKey = localStorage.getItem('supabase-key') || DEFAULT_SUPABASE_KEY;
     if (sUrl && sKey) {
       fetch(`${sUrl}/rest/v1/birthday_data`, {
         method: 'POST',
