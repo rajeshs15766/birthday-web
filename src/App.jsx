@@ -2564,6 +2564,37 @@ function CreatorDashboard({ setViewMode }) {
     window.dispatchEvent(new Event('birthday-gallery-updated'));
   };
 
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
+        setNewPhoto(prev => ({ ...prev, src: compressedBase64 }));
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const deleteCustomPhoto = (index) => {
     if (!window.confirm("Are you sure you want to remove this photo from the gallery?")) return;
     const updated = customPhotos.filter((_, i) => i !== index);
@@ -2950,14 +2981,21 @@ function CreatorDashboard({ setViewMode }) {
                   
                   <div className="grid sm:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-widest mb-1.5 pl-1">Image URL / Path</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. /photo1.jpg or HTTPS link"
-                        value={newPhoto.src}
-                        onChange={(e) => setNewPhoto(prev => ({ ...prev, src: e.target.value }))}
-                        className="input-modern py-2.5 px-4 text-xs"
-                      />
+                      <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-widest mb-1.5 pl-1">Upload Photo</label>
+                      <div className="relative">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="absolute inset-0 opacity-0 cursor-pointer z-10 w-full h-full"
+                        />
+                        <div className="input-modern py-2.5 px-4 text-xs flex items-center justify-between bg-black/40 border border-pink-500/20 rounded-xl hover:border-pink-500/50 transition-colors">
+                          <span className="text-gray-400 truncate">
+                            {newPhoto.src ? "✅ Photo Selected" : "📁 Choose Image..."}
+                          </span>
+                          <span className="text-[10px] font-bold text-pink-300 bg-pink-500/10 px-2 py-0.5 rounded-md">Browse</span>
+                        </div>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-widest mb-1.5 pl-1">Caption</label>
@@ -2989,8 +3027,22 @@ function CreatorDashboard({ setViewMode }) {
                       </div>
                     </div>
                   </div>
+                  {newPhoto.src && (
+                    <div className="mt-4 flex items-center gap-4 bg-white/5 p-3 rounded-2xl border border-white/5 animate-scaleUp">
+                      <div className="w-14 h-14 rounded-xl overflow-hidden bg-black/40 border border-white/10 shrink-0">
+                        <img src={newPhoto.src} className="w-full h-full object-cover" alt="Preview" />
+                      </div>
+                      <div className="text-left">
+                        <span className="text-[9px] font-bold text-pink-400 uppercase tracking-widest block">Photo Selected Preview</span>
+                        <p className="text-[11px] text-gray-400 mt-1 font-medium leading-relaxed">
+                          Image successfully loaded, compressed to web standard, and ready to be added! ✨
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <p className="text-[10px] text-gray-500 pl-1">
-                    💡 <strong>Tip:</strong> You can place files inside the <code>public/</code> folder of the code and reference them (e.g. <code>/myphoto.jpg</code>) or use external image links from Imgur or other image hosting sites.
+                    💡 <strong>Tip:</strong> Choose any image file directly from your device! The site will automatically resize and compress it so it loads instantly for Rekodaaaaa.
                   </p>
                 </div>
 
