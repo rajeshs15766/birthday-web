@@ -589,33 +589,7 @@ function WishesWall({ logActivity }) {
 }
 
 // Memory Quiz Component
-function MemoryQuiz({ logActivity }) {
-  const questions = [
-    {
-      question: "When did we first meet?",
-      options: ["2018", "2019", "2020", "2021"],
-      correct: 1,
-      emoji: "🌟"
-    },
-    {
-      question: "What's my go-to overthinking hour?",
-      options: ["Morning", "Afternoon", "Night", "Always"],
-      correct: 3,
-      emoji: "🌙"
-    },
-    {
-      question: "Where was our first outing?",
-      options: ["Mall", "Beach", "Restaurant", "Park"],
-      correct: 1,
-      emoji: "🏖️"
-    },
-    {
-      question: "Who does Rekoda claim to be married to?",
-      options: ["V", "Jimin", "Jungkook", "Suga"],
-      correct: 2,
-      emoji: "💜"
-    }
-  ];
+function MemoryQuiz({ questions = defaultQuestions, logActivity }) {
 
   const [currentQ, setCurrentQ] = useState(0);
   const [score, setScore] = useState(0);
@@ -1312,7 +1286,33 @@ const galleryPhotos = [
   { src: '/photo2.jpg', caption: 'Beach Day Memories', date: '2023' },
   { src: '/photo3.jpg', caption: 'Late Night Hangout', date: '2024' },
   { src: '/photo4.jpg', caption: 'Birthday Last Year', date: '2025' }
+];const defaultQuestions = [
+  {
+    question: "When did we first meet?",
+    options: ["2018", "2019", "2020", "2021"],
+    correct: 1,
+    emoji: "🌟"
+  },
+  {
+    question: "What's my go-to overthinking hour?",
+    options: ["Morning", "Afternoon", "Night", "Always"],
+    correct: 3,
+    emoji: "🌙"
+  },
+  {
+    question: "Where was our first outing?",
+    options: ["Mall", "Beach", "Restaurant", "Park"],
+    correct: 1,
+    emoji: "🏖️"
+  },
+  {
+    question: "Who does Rekoda claim to be married to?",
+    options: ["V", "Jimin", "Jungkook", "Suga"],
+    correct: 2,
+    emoji: "💜"
+  }
 ];
+
 
 export default function BirthdayWebsite() {
   const [viewMode, setViewMode] = useState('user'); // 'user' or 'dashboard'
@@ -1659,6 +1659,7 @@ function WebsiteContent({ setViewMode }) {
   const [typewriterStoryText, setTypewriterStoryText] = useState("Some people become important slowly... and before you realize it, they become part of your life forever ✨");
   const [scratchCardSecret, setScratchCardSecret] = useState("You're not just a friend — you're family I chose 💖");
   const [photos, setPhotos] = useState(galleryPhotos);
+  const [quizQuestions, setQuizQuestions] = useState(defaultQuestions);
 
   const audioRef = useRef(null);
 
@@ -1677,13 +1678,18 @@ function WebsiteContent({ setViewMode }) {
     const savedPhotos = localStorage.getItem('birthday-gallery-photos');
     if (savedPhotos) setPhotos(JSON.parse(savedPhotos));
 
+    const savedQuestions = localStorage.getItem('birthday-quiz-questions');
+    if (savedQuestions) setQuizQuestions(JSON.parse(savedQuestions));
+
     // 2. Fetch live settings update directly from Supabase database
     const sUrl = localStorage.getItem('supabase-url');
     const sKey = localStorage.getItem('supabase-key');
     
-    const loadPhotos = () => {
+    const loadSettings = () => {
       const sp = localStorage.getItem('birthday-gallery-photos');
       if (sp) setPhotos(JSON.parse(sp));
+      const sq = localStorage.getItem('birthday-quiz-questions');
+      if (sq) setQuizQuestions(JSON.parse(sq));
     };
 
     if (sUrl && sKey) {
@@ -1716,6 +1722,10 @@ function WebsiteContent({ setViewMode }) {
             setPhotos(config.photos);
             localStorage.setItem('birthday-gallery-photos', JSON.stringify(config.photos));
           }
+          if (config.quizQuestions) {
+            setQuizQuestions(config.quizQuestions);
+            localStorage.setItem('birthday-quiz-questions', JSON.stringify(config.quizQuestions));
+          }
         }
       })
       .catch(err => {
@@ -1723,8 +1733,8 @@ function WebsiteContent({ setViewMode }) {
       });
     }
 
-    window.addEventListener('birthday-gallery-updated', loadPhotos);
-    return () => window.removeEventListener('birthday-gallery-updated', loadPhotos);
+    window.addEventListener('birthday-gallery-updated', loadSettings);
+    return () => window.removeEventListener('birthday-gallery-updated', loadSettings);
   }, []);
 
   // Set soft audio volume and track ref
@@ -2167,7 +2177,7 @@ function WebsiteContent({ setViewMode }) {
             </h2>
           </div>
 
-          <MemoryQuiz logActivity={logActivity} />
+          <MemoryQuiz questions={quizQuestions} logActivity={logActivity} />
         </div>
       </section>
 
@@ -2462,6 +2472,17 @@ function CreatorDashboard({ setViewMode }) {
   const [customPhotos, setCustomPhotos] = useState([]);
   const [newPhoto, setNewPhoto] = useState({ src: '', caption: '', date: '' });
 
+  const [customQuestions, setCustomQuestions] = useState([]);
+  const [newQuestion, setNewQuestion] = useState({
+    question: '',
+    optionA: '',
+    optionB: '',
+    optionC: '',
+    optionD: '',
+    correct: 0,
+    emoji: '🧠'
+  });
+
   const loadDashboardData = useCallback(() => {
     // 1. Wishes Local
     const savedWishes = JSON.parse(localStorage.getItem('birthday-wishes') || '[]');
@@ -2482,6 +2503,10 @@ function CreatorDashboard({ setViewMode }) {
     // 5. Memory Gallery Photos Local
     const savedPhotos = JSON.parse(localStorage.getItem('birthday-gallery-photos') || '[]');
     setCustomPhotos(savedPhotos.length > 0 ? savedPhotos : galleryPhotos);
+
+    // 6. Memory Quiz Questions Local
+    const savedQuestions = JSON.parse(localStorage.getItem('birthday-quiz-questions') || '[]');
+    setCustomQuestions(savedQuestions.length > 0 ? savedQuestions : defaultQuestions);
 
     // Customize states
     setCustomPass(localStorage.getItem('custom-gateway-pass') || 'rekodaaaaa');
@@ -2546,6 +2571,10 @@ function CreatorDashboard({ setViewMode }) {
           if (config.photos) {
             setCustomPhotos(config.photos);
             localStorage.setItem('birthday-gallery-photos', JSON.stringify(config.photos));
+          }
+          if (config.quizQuestions) {
+            setCustomQuestions(config.quizQuestions);
+            localStorage.setItem('birthday-quiz-questions', JSON.stringify(config.quizQuestions));
           }
         }
       })
@@ -2617,7 +2646,7 @@ function CreatorDashboard({ setViewMode }) {
     }
   };
 
-  const syncSettingsToCloud = (updatedPhotos, typewriter, scratch, passcode) => {
+  const syncSettingsToCloud = (updatedPhotos, typewriter, scratch, passcode, updatedQuestions) => {
     const sUrl = localStorage.getItem('supabase-url');
     const sKey = localStorage.getItem('supabase-key');
     if (!sUrl || !sKey) return;
@@ -2626,7 +2655,8 @@ function CreatorDashboard({ setViewMode }) {
       gatewayPass: passcode || customPass,
       typewriterStoryText: typewriter || customTypewriter,
       scratchCardSecret: scratch || customScratch,
-      photos: updatedPhotos || customPhotos
+      photos: updatedPhotos || customPhotos,
+      quizQuestions: updatedQuestions || customQuestions
     };
 
     // Deletes previous configuration records to prevent duplicates and keep the DB clean
@@ -2714,6 +2744,59 @@ function CreatorDashboard({ setViewMode }) {
     syncSettingsToCloud(updated);
   };
 
+  const addCustomQuestion = () => {
+    if (
+      !newQuestion.question.trim() ||
+      !newQuestion.optionA.trim() ||
+      !newQuestion.optionB.trim() ||
+      !newQuestion.optionC.trim() ||
+      !newQuestion.optionD.trim()
+    ) return;
+
+    const formattedQ = {
+      question: newQuestion.question.trim(),
+      options: [
+        newQuestion.optionA.trim(),
+        newQuestion.optionB.trim(),
+        newQuestion.optionC.trim(),
+        newQuestion.optionD.trim()
+      ],
+      correct: parseInt(newQuestion.correct),
+      emoji: newQuestion.emoji.trim() || '🧠'
+    };
+
+    const updated = [...customQuestions, formattedQ];
+    setCustomQuestions(updated);
+    localStorage.setItem('birthday-quiz-questions', JSON.stringify(updated));
+
+    // Reset form state
+    setNewQuestion({
+      question: '',
+      optionA: '',
+      optionB: '',
+      optionC: '',
+      optionD: '',
+      correct: 0,
+      emoji: '🧠'
+    });
+
+    window.dispatchEvent(new Event('birthday-gallery-updated'));
+
+    // Sync changes to cloud
+    syncSettingsToCloud(null, null, null, null, updated);
+  };
+
+  const deleteCustomQuestion = (index) => {
+    if (!window.confirm("Are you sure you want to remove this question from the quiz?")) return;
+    const updated = customQuestions.filter((_, i) => i !== index);
+    setCustomQuestions(updated);
+    localStorage.setItem('birthday-quiz-questions', JSON.stringify(updated));
+    window.dispatchEvent(new Event('birthday-gallery-updated'));
+
+    // Sync changes to cloud
+    syncSettingsToCloud(null, null, null, null, updated);
+  };
+
   const saveCustomSettings = () => {
     const trimmedUrl = supabaseUrl.trim();
     const trimmedKey = supabaseKey.trim();
@@ -2725,7 +2808,7 @@ function CreatorDashboard({ setViewMode }) {
     localStorage.setItem('supabase-key', trimmedKey);
 
     // Sync settings & gallery photos together to Supabase
-    syncSettingsToCloud(customPhotos, customTypewriter.trim(), customScratch.trim(), customPass.trim());
+    syncSettingsToCloud(customPhotos, customTypewriter.trim(), customScratch.trim(), customPass.trim(), customQuestions);
 
     // If new Supabase settings are added, upload all current local database entries
     if (trimmedUrl && trimmedKey) {
@@ -2831,6 +2914,7 @@ function CreatorDashboard({ setViewMode }) {
             { id: 'wishes', label: '💝 Guest Wishes', count: wishes.length },
             { id: 'voice', label: '🎤 Voice Notes', count: voiceNotes.length },
             { id: 'quiz', label: '🧠 Quiz Scores', count: quizScores.length },
+            { id: 'quiz-questions', label: '🧠 Q&A Manager', count: customQuestions.length },
             { id: 'activity', label: '📈 Interaction Logs', count: activityLogs.length },
             { id: 'customizer', label: '⚙️ Site Settings', count: null }
           ].map(tab => (
@@ -3204,6 +3288,170 @@ function CreatorDashboard({ setViewMode }) {
                 >
                   Save Configuration ✨
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* QUIZ QUESTIONS PANEL */}
+          {activeTab === 'quiz-questions' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-white tracking-wide">Memory Quiz Q&A Manager 🧠</h3>
+                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Dynamic Memory quiz gating</span>
+              </div>
+
+              {/* Add Quiz Question Form */}
+              <div className="glass-strong rounded-3xl p-5 border border-white/5 space-y-4">
+                <span className="text-xs font-bold text-gray-300 uppercase tracking-widest block text-left pl-1">Add New Quiz Question</span>
+                
+                <div className="space-y-4 text-left">
+                  {/* Question and Emoji */}
+                  <div className="grid sm:grid-cols-4 gap-4">
+                    <div className="sm:col-span-3">
+                      <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-widest mb-1.5 pl-1">Question Text</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. When did we first meet?"
+                        value={newQuestion.question}
+                        onChange={(e) => setNewQuestion(prev => ({ ...prev, question: e.target.value }))}
+                        className="input-modern py-2.5 px-4 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-widest mb-1.5 pl-1">Emoji</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 🌟"
+                        value={newQuestion.emoji}
+                        onChange={(e) => setNewQuestion(prev => ({ ...prev, emoji: e.target.value }))}
+                        className="input-modern py-2.5 px-4 text-xs text-center"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Options */}
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-widest mb-1.5 pl-1">Option A</label>
+                      <input
+                        type="text"
+                        placeholder="Option A Text"
+                        value={newQuestion.optionA}
+                        onChange={(e) => setNewQuestion(prev => ({ ...prev, optionA: e.target.value }))}
+                        className="input-modern py-2.5 px-4 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-widest mb-1.5 pl-1">Option B</label>
+                      <input
+                        type="text"
+                        placeholder="Option B Text"
+                        value={newQuestion.optionB}
+                        onChange={(e) => setNewQuestion(prev => ({ ...prev, optionB: e.target.value }))}
+                        className="input-modern py-2.5 px-4 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-widest mb-1.5 pl-1">Option C</label>
+                      <input
+                        type="text"
+                        placeholder="Option C Text"
+                        value={newQuestion.optionC}
+                        onChange={(e) => setNewQuestion(prev => ({ ...prev, optionC: e.target.value }))}
+                        className="input-modern py-2.5 px-4 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-widest mb-1.5 pl-1">Option D</label>
+                      <input
+                        type="text"
+                        placeholder="Option D Text"
+                        value={newQuestion.optionD}
+                        onChange={(e) => setNewQuestion(prev => ({ ...prev, optionD: e.target.value }))}
+                        className="input-modern py-2.5 px-4 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Correct Option Choice */}
+                  <div className="grid sm:grid-cols-2 gap-4 items-end">
+                    <div>
+                      <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-widest mb-1.5 pl-1">Correct Answer</label>
+                      <select
+                        value={newQuestion.correct}
+                        onChange={(e) => setNewQuestion(prev => ({ ...prev, correct: parseInt(e.target.value) }))}
+                        className="input-modern py-2.5 px-4 text-xs bg-[#0b0616] border border-white/10 text-white rounded-xl"
+                      >
+                        <option value={0}>Option A</option>
+                        <option value={1}>Option B</option>
+                        <option value={2}>Option C</option>
+                        <option value={3}>Option D</option>
+                      </select>
+                    </div>
+
+                    <button
+                      onClick={addCustomQuestion}
+                      disabled={
+                        !newQuestion.question.trim() ||
+                        !newQuestion.optionA.trim() ||
+                        !newQuestion.optionB.trim() ||
+                        !newQuestion.optionC.trim() ||
+                        !newQuestion.optionD.trim()
+                      }
+                      className="btn-primary w-full py-2.5 rounded-xl font-extrabold text-xs disabled:opacity-50"
+                    >
+                      + Add Question to Quiz 🧠
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quiz Questions List */}
+              <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1">
+                {customQuestions.map((q, index) => (
+                  <div key={index} className="glass rounded-2xl p-5 border border-white/5 text-left relative group">
+                    <div className="flex items-start gap-4 pr-10">
+                      <span className="text-3xl select-none shrink-0">{q.emoji || '🧠'}</span>
+                      <div className="space-y-2 flex-1">
+                        <span className="text-[9px] font-bold text-pink-400 bg-pink-500/10 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                          Question {index + 1}
+                        </span>
+                        <h4 className="text-sm font-bold text-white leading-relaxed mt-2">{q.question}</h4>
+                        
+                        <div className="grid sm:grid-cols-2 gap-2.5 mt-4">
+                          {q.options.map((opt, optIdx) => (
+                            <div
+                              key={optIdx}
+                              className={`text-xs p-2.5 rounded-xl border font-medium ${
+                                optIdx === q.correct
+                                  ? 'bg-green-500/20 border-green-500/60 text-green-300 font-bold'
+                                  : 'bg-white/5 border-white/5 text-gray-400'
+                              }`}
+                            >
+                              <span className="text-gray-500 mr-1.5 font-bold">{String.fromCharCode(65 + optIdx)}.</span>
+                              {opt}
+                              {optIdx === q.correct && <span className="ml-1.5 text-[9px] font-bold text-green-400 uppercase tracking-widest">(Correct)</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => deleteCustomQuestion(index)}
+                      className="absolute top-4 right-4 bg-red-500/80 hover:bg-red-600 text-white w-7 h-7 rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity font-bold shadow-md"
+                      title="Remove question"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+
+                {customQuestions.length === 0 && (
+                  <p className="text-center text-xs text-gray-500 py-10">
+                    No quiz questions present. Click "+ Add Question" above to configure your quiz!
+                  </p>
+                )}
               </div>
             </div>
           )}
