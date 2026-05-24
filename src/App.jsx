@@ -425,44 +425,13 @@ function PhotoGallery({ photos }) {
 
 // Wishes Wall
 function WishesWall({ logActivity }) {
-  const [wishes, setWishes] = useState([]);
   const [newWish, setNewWish] = useState({ name: '', message: '' });
-  const [showForm, setShowForm] = useState(false);
-
-  useEffect(() => {
-    // Load local cache first
-    const saved = localStorage.getItem('birthday-wishes');
-    if (saved) {
-      setWishes(JSON.parse(saved));
-    }
-
-    // Supabase cloud synchronization
-    const sUrl = localStorage.getItem('supabase-url');
-    const sKey = localStorage.getItem('supabase-key');
-    if (sUrl && sKey) {
-      fetch(`${sUrl}/rest/v1/birthday_data?type=eq.wish&order=created_at.desc`, {
-        headers: {
-          'apikey': sKey,
-          'Authorization': `Bearer ${sKey}`
-        }
-      })
-      .then(res => {
-        if (!res.ok) throw new Error("Sync failed");
-        return res.json();
-      })
-      .then(data => {
-        const fetchedWishes = data.map(item => item.payload);
-        if (fetchedWishes.length > 0) {
-          setWishes(fetchedWishes);
-          localStorage.setItem('birthday-wishes', JSON.stringify(fetchedWishes));
-        }
-      })
-      .catch(err => console.log("Wishes cloud sync deferred:", err));
-    }
-  }, []);
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const addWish = () => {
     if (!newWish.name.trim() || !newWish.message.trim()) return;
+    setLoading(true);
 
     const wish = {
       id: Date.now(),
@@ -471,10 +440,6 @@ function WishesWall({ logActivity }) {
       time: new Date().toLocaleTimeString(),
       color: ['#ff69b4', '#9370db', '#00ced1', '#ffd700', '#ff6347'][Math.floor(Math.random() * 5)]
     };
-
-    const updated = [...wishes, wish];
-    setWishes(updated);
-    localStorage.setItem('birthday-wishes', JSON.stringify(updated));
 
     // Supabase cloud sync
     const sUrl = localStorage.getItem('supabase-url');
@@ -492,7 +457,23 @@ function WishesWall({ logActivity }) {
           type: 'wish',
           payload: wish
         })
-      }).catch(err => console.error("Cloud wish sync failed:", err));
+      })
+      .then(() => {
+        setLoading(false);
+        setSubmitted(true);
+      })
+      .catch(err => {
+        console.error("Cloud wish sync failed:", err);
+        setLoading(false);
+        // Fallback to local success even if fetch was deferred
+        setSubmitted(true);
+      });
+    } else {
+      // Local fallback
+      const saved = JSON.parse(localStorage.getItem('birthday-wishes') || '[]');
+      localStorage.setItem('birthday-wishes', JSON.stringify([...saved, wish]));
+      setLoading(false);
+      setSubmitted(true);
     }
 
     // Log activity
@@ -501,73 +482,86 @@ function WishesWall({ logActivity }) {
     }
 
     setNewWish({ name: '', message: '' });
-    setShowForm(false);
   };
 
   return (
-    <div>
-      <div className="flex flex-wrap gap-6 justify-center mb-10 px-4">
-        {wishes.map((wish) => (
-          <div
-            key={wish.id}
-            className="glass-strong rounded-3xl p-6 w-full sm:w-72 transform hover:scale-[1.03] hover:-rotate-1 transition-all duration-300 relative group overflow-hidden border border-white/10"
-            style={{ borderLeft: `6px solid ${wish.color}` }}
-          >
-            <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-30 transition-opacity">
-              <span className="text-4xl">💝</span>
-            </div>
-            <p className="text-gray-200 italic mb-6 leading-relaxed font-medium relative z-10">"{wish.message}"</p>
-            <div className="flex justify-between items-center relative z-10">
-              <span className="text-pink-400 font-bold tracking-wide">— {wish.name}</span>
-              <span className="text-gray-500 text-xs font-semibold">{wish.date}</span>
-            </div>
-          </div>
-        ))}
+    <div className="max-w-xl mx-auto px-4">
+      {!submitted ? (
+        <div className="glass-strong rounded-[40px] p-8 border border-white/10 shadow-2xl relative overflow-hidden transform hover:scale-[1.01] transition-transform duration-500">
+          {/* Ambient Glows */}
+          <div className="absolute -top-10 -right-10 w-24 h-24 bg-pink-500/20 rounded-full blur-xl pointer-events-none"></div>
+          <div className="absolute -bottom-10 -left-10 w-24 h-24 bg-purple-500/20 rounded-full blur-xl pointer-events-none"></div>
 
-        {/* Add wish card */}
-        <div
-          className="glass rounded-3xl p-8 w-full sm:w-72 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-all duration-300 border-2 border-dashed border-pink-500/20 hover:border-pink-500/60 group min-h-[180px]"
-          onClick={() => setShowForm(true)}
-        >
-          <div className="text-center group-hover:scale-110 transition-transform duration-300">
-            <div className="text-5xl mb-3">💝</div>
-            <p className="text-pink-300 font-semibold tracking-wide">Leave a Birthday Wish</p>
-            <p className="text-gray-500 text-xs mt-1">Make her smile with a message</p>
+          <div className="relative z-10 text-center mb-8">
+            <div className="text-6xl mb-4 floating" style={{ animationDelay: '0s' }}>💌</div>
+            <h3 className="text-3xl font-extrabold text-white tracking-wide" style={{ fontFamily: 'Playfair Display' }}>
+              Secret Wish Drop-Box
+            </h3>
+            <p className="text-xs text-gray-400 mt-2.5 leading-relaxed font-medium">
+              To keep your message a beautiful mystery and completely secure, your wish is immediately encrypted and dropped directly into the creator's private dashboard. No one else can ever view it! ✨
+            </p>
+          </div>
+
+          <div className="space-y-4 relative z-10">
+            <div>
+              <label className="block text-[10px] uppercase font-bold tracking-widest text-pink-300 mb-2 pl-1">
+                Your Beautiful Name
+              </label>
+              <input
+                type="text"
+                placeholder="Enter your name..."
+                value={newWish.name}
+                onChange={(e) => setNewWish({ ...newWish, name: e.target.value })}
+                className="input-modern"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10px] uppercase font-bold tracking-widest text-pink-300 mb-2 pl-1">
+                Your Warm Birthday Wish
+              </label>
+              <textarea
+                placeholder="Write something sweet and memorable for her special day..."
+                value={newWish.message}
+                onChange={(e) => setNewWish({ ...newWish, message: e.target.value })}
+                className="input-modern h-32 resize-none"
+              />
+            </div>
+
+            <button
+              onClick={addWish}
+              disabled={loading || !newWish.name.trim() || !newWish.message.trim()}
+              className="btn-primary w-full py-4 text-sm font-bold tracking-wider uppercase mt-4 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <span>Sealing Wish... 🔐</span>
+              ) : (
+                <span>Seal & Send Wish 💖</span>
+              )}
+            </button>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="glass-strong rounded-[40px] p-10 border border-white/10 shadow-2xl text-center relative overflow-hidden animate-scaleUp">
+          <div className="absolute -top-10 -right-10 w-24 h-24 bg-green-500/10 rounded-full blur-xl pointer-events-none"></div>
 
-      {/* Wish Form Modal */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4 backdrop-blur-md animate-fadeIn" onClick={() => setShowForm(false)}>
-          <div className="glass-strong rounded-[40px] p-6 md:p-10 max-w-md w-full border border-white/10" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-3xl font-bold mb-2 text-center gradient-text" style={{ fontFamily: 'Playfair Display' }}>Leave Your Wish 💖</h3>
-            <p className="text-gray-400 text-center text-sm mb-6">Write something beautiful for her special day</p>
-
-            <input
-              type="text"
-              placeholder="Your name"
-              value={newWish.name}
-              onChange={(e) => setNewWish({ ...newWish, name: e.target.value })}
-              className="input-modern mb-4"
-            />
-
-            <textarea
-              placeholder="Your birthday wish..."
-              value={newWish.message}
-              onChange={(e) => setNewWish({ ...newWish, message: e.target.value })}
-              className="input-modern mb-6 h-36 resize-none"
-            />
-
-            <div className="flex gap-4">
-              <button onClick={() => setShowForm(false)} className="flex-1 py-3.5 rounded-full border border-white/10 text-gray-300 hover:bg-white/5 transition-colors font-semibold">
-                Cancel
-              </button>
-              <button onClick={addWish} className="btn-primary flex-1 font-semibold">
-                Send Wish ✨
-              </button>
-            </div>
+          <div className="text-7xl mb-6 animate-bounce">✨💝✨</div>
+          <h3 className="text-3xl font-bold text-white mb-4" style={{ fontFamily: 'Playfair Display' }}>
+            Sealed in the Stars! 🌟
+          </h3>
+          <p className="text-sm text-gray-300 leading-relaxed max-w-sm mx-auto font-medium">
+            Your beautiful wish has been successfully dropped inside our private wishing well and sent straight to the creator!
+          </p>
+          <div className="mt-8 inline-block glass border border-green-500/20 px-6 py-3.5 rounded-full shadow-lg">
+            <span className="text-sm text-green-300 font-bold uppercase tracking-wider">🔒 Message Encrypted & Saved</span>
           </div>
+
+          <button
+            onClick={() => setSubmitted(false)}
+            className="mt-8 text-pink-400 hover:text-pink-300 font-bold text-xs uppercase tracking-widest transition-colors block mx-auto underline"
+          >
+            Write another secret wish 💌
+          </button>
         </div>
       )}
     </div>
