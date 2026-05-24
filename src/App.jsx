@@ -722,6 +722,13 @@ function MemoryQuiz({ logActivity }) {
     setAutoSubmitted(false);
     setSubmitted(false);
     setLoading(false);
+
+    // Ask user everytime: Wipe name and score cache on reset/play again
+    localStorage.removeItem('birthday-guest-name');
+    localStorage.removeItem('birthday-quiz-attempts');
+    setGuestNameSaved(false);
+    setPlayerName('');
+    window.dispatchEvent(new Event('guest-name-updated'));
   };
 
   if (!guestNameSaved) {
@@ -1314,6 +1321,10 @@ export default function BirthdayWebsite() {
     // Automatically set hardcoded Supabase project credentials on first load
     localStorage.setItem('supabase-url', 'https://qisvrtkuzznmllfvdgdj.supabase.co');
     localStorage.setItem('supabase-key', 'sb_publishable_CpXOzfNo_ivz-s12Hi_1ug_pPROfVYF');
+
+    // Ask user everytime: Clear name and quiz scores cache on fresh load/refresh
+    localStorage.removeItem('birthday-guest-name');
+    localStorage.removeItem('birthday-quiz-attempts');
   }, []);
 
   return (
@@ -2503,6 +2514,26 @@ function CreatorDashboard({ setViewMode }) {
     }
   };
 
+  const deleteQuizScore = (id) => {
+    if (!window.confirm("Are you sure you want to delete this quiz score attempt?")) return;
+    const updated = quizScores.filter(q => q.id !== id);
+    setQuizScores(updated);
+    localStorage.setItem('birthday-quiz-attempts', JSON.stringify(updated));
+
+    // Supabase Delete Sync
+    const sUrl = localStorage.getItem('supabase-url');
+    const sKey = localStorage.getItem('supabase-key');
+    if (sUrl && sKey) {
+      fetch(`${sUrl}/rest/v1/birthday_data?payload->>id=eq.${id}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': sKey,
+          'Authorization': `Bearer ${sKey}`
+        }
+      }).catch(err => console.error("Cloud deletion failed:", err));
+    }
+  };
+
   const saveCustomSettings = () => {
     const trimmedUrl = supabaseUrl.trim();
     const trimmedKey = supabaseKey.trim();
@@ -2616,6 +2647,7 @@ function CreatorDashboard({ setViewMode }) {
           {[
             { id: 'wishes', label: '💝 Guest Wishes', count: wishes.length },
             { id: 'voice', label: '🎤 Voice Notes', count: voiceNotes.length },
+            { id: 'quiz', label: '🧠 Quiz Scores', count: quizScores.length },
             { id: 'activity', label: '📈 Interaction Logs', count: activityLogs.length },
             { id: 'customizer', label: '⚙️ Site Settings', count: null }
           ].map(tab => (
@@ -2721,6 +2753,56 @@ function CreatorDashboard({ setViewMode }) {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* QUIZ SCORES PANEL */}
+          {activeTab === 'quiz' && (
+            <div>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-white tracking-wide">Memory Quiz Scores</h3>
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">Score registers</span>
+              </div>
+
+              {quizScores.length === 0 ? (
+                <div className="text-center py-16">
+                  <span className="text-5xl block mb-4 select-none">🧠</span>
+                  <p className="text-gray-400 font-semibold text-lg">No quiz attempts yet.</p>
+                  <p className="text-gray-600 text-sm mt-1">Scores will register automatically after someone plays the quiz.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/10 text-gray-400 text-xs font-bold uppercase tracking-widest">
+                        <th className="py-4 px-3">Date</th>
+                        <th className="py-4 px-3">Guest Name</th>
+                        <th className="py-4 px-3">Score</th>
+                        <th className="py-4 px-3">Accuracy</th>
+                        <th className="py-4 px-3 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {quizScores.map((scoreObj) => (
+                        <tr key={scoreObj.id} className="hover:bg-white/5 transition-colors font-medium">
+                          <td className="py-4 px-3 text-gray-400 text-sm whitespace-nowrap">{scoreObj.date} {scoreObj.time || ''}</td>
+                          <td className="py-4 px-3 text-pink-300 font-bold">{scoreObj.name}</td>
+                          <td className="py-4 px-3 text-white font-bold">{scoreObj.score} / {scoreObj.total}</td>
+                          <td className="py-4 px-3 text-cyan-300">{scoreObj.percentage}%</td>
+                          <td className="py-4 px-3 text-right">
+                            <button
+                              onClick={() => deleteQuizScore(scoreObj.id)}
+                              className="py-1.5 px-3.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-white transition-all text-xs font-bold"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>
