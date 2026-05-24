@@ -430,9 +430,34 @@ function WishesWall({ logActivity }) {
   const [showForm, setShowForm] = useState(false);
 
   useEffect(() => {
+    // Load local cache first
     const saved = localStorage.getItem('birthday-wishes');
     if (saved) {
       setWishes(JSON.parse(saved));
+    }
+
+    // Supabase cloud synchronization
+    const sUrl = localStorage.getItem('supabase-url');
+    const sKey = localStorage.getItem('supabase-key');
+    if (sUrl && sKey) {
+      fetch(`${sUrl}/rest/v1/birthday_data?type=eq.wish&order=created_at.desc`, {
+        headers: {
+          'apikey': sKey,
+          'Authorization': `Bearer ${sKey}`
+        }
+      })
+      .then(res => {
+        if (!res.ok) throw new Error("Sync failed");
+        return res.json();
+      })
+      .then(data => {
+        const fetchedWishes = data.map(item => item.payload);
+        if (fetchedWishes.length > 0) {
+          setWishes(fetchedWishes);
+          localStorage.setItem('birthday-wishes', JSON.stringify(fetchedWishes));
+        }
+      })
+      .catch(err => console.log("Wishes cloud sync deferred:", err));
     }
   }, []);
 
@@ -450,6 +475,25 @@ function WishesWall({ logActivity }) {
     const updated = [...wishes, wish];
     setWishes(updated);
     localStorage.setItem('birthday-wishes', JSON.stringify(updated));
+
+    // Supabase cloud sync
+    const sUrl = localStorage.getItem('supabase-url');
+    const sKey = localStorage.getItem('supabase-key');
+    if (sUrl && sKey) {
+      fetch(`${sUrl}/rest/v1/birthday_data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': sKey,
+          'Authorization': `Bearer ${sKey}`,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          type: 'wish',
+          payload: wish
+        })
+      }).catch(err => console.error("Cloud wish sync failed:", err));
+    }
 
     // Log activity
     if (logActivity) {
@@ -598,6 +642,25 @@ function MemoryQuiz({ logActivity }) {
         time: new Date().toLocaleTimeString(),
       };
       localStorage.setItem('birthday-quiz-attempts', JSON.stringify([...quizAttempts, newAttempt]));
+
+      // Supabase cloud sync
+      const sUrl = localStorage.getItem('supabase-url');
+      const sKey = localStorage.getItem('supabase-key');
+      if (sUrl && sKey) {
+        fetch(`${sUrl}/rest/v1/birthday_data`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': sKey,
+            'Authorization': `Bearer ${sKey}`,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            type: 'quiz',
+            payload: newAttempt
+          })
+        }).catch(err => console.error("Cloud quiz save failed:", err));
+      }
 
       // Log activity
       if (logActivity) {
@@ -810,7 +873,28 @@ function VoiceMessage({ logActivity, onRecordStart }) {
         date: new Date().toLocaleDateString(),
         time: new Date().toLocaleTimeString(),
       };
-      localStorage.setItem('birthday-voice-notes', JSON.stringify([...existingVoiceNotes, newVoiceNote]));
+      
+      const updatedNotes = [...existingVoiceNotes, newVoiceNote];
+      localStorage.setItem('birthday-voice-notes', JSON.stringify(updatedNotes));
+
+      // Supabase cloud sync
+      const sUrl = localStorage.getItem('supabase-url');
+      const sKey = localStorage.getItem('supabase-key');
+      if (sUrl && sKey) {
+        fetch(`${sUrl}/rest/v1/birthday_data`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': sKey,
+            'Authorization': `Bearer ${sKey}`,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            type: 'voice',
+            payload: newVoiceNote
+          })
+        }).catch(err => console.error("Cloud voice note sync failed:", err));
+      }
 
       if (logActivity) {
         logActivity('Recorded Voice Note', `Saved voice message #${newVoiceNote.id}`);
@@ -1466,6 +1550,25 @@ function WebsiteContent({ setViewMode }) {
       details
     };
     localStorage.setItem('birthday-activity', JSON.stringify([newLog, ...logs]));
+
+    // Supabase cloud sync
+    const sUrl = localStorage.getItem('supabase-url');
+    const sKey = localStorage.getItem('supabase-key');
+    if (sUrl && sKey) {
+      fetch(`${sUrl}/rest/v1/birthday_data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': sKey,
+          'Authorization': `Bearer ${sKey}`,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          type: 'log',
+          payload: newLog
+        })
+      }).catch(err => console.error("Cloud log sync failed:", err));
+    }
   }, []);
 
   // Intersection observer for scrolling animations
@@ -2172,22 +2275,24 @@ function CreatorDashboard({ setViewMode }) {
   const [customPass, setCustomPass] = useState('rekodaaaaa');
   const [customTypewriter, setCustomTypewriter] = useState('');
   const [customScratch, setCustomScratch] = useState('');
+  const [supabaseUrl, setSupabaseUrl] = useState('');
+  const [supabaseKey, setSupabaseKey] = useState('');
   const [saveStatus, setSaveStatus] = useState('');
 
   const loadDashboardData = useCallback(() => {
-    // 1. Wishes
+    // 1. Wishes Local
     const savedWishes = JSON.parse(localStorage.getItem('birthday-wishes') || '[]');
     setWishes(savedWishes);
 
-    // 2. Voice notes
+    // 2. Voice notes Local
     const savedVoice = JSON.parse(localStorage.getItem('birthday-voice-notes') || '[]');
     setVoiceNotes(savedVoice);
 
-    // 3. Quiz Scores
+    // 3. Quiz Scores Local
     const savedScores = JSON.parse(localStorage.getItem('birthday-quiz-attempts') || '[]');
     setQuizScores(savedScores);
 
-    // 4. Activity Logs
+    // 4. Activity Logs Local
     const savedLogs = JSON.parse(localStorage.getItem('birthday-activity') || '[]');
     setActivityLogs(savedLogs);
 
@@ -2195,6 +2300,48 @@ function CreatorDashboard({ setViewMode }) {
     setCustomPass(localStorage.getItem('custom-gateway-pass') || 'rekodaaaaa');
     setCustomTypewriter(localStorage.getItem('custom-typewriter') || "Some people become important slowly... and before you realize it, they become part of your life forever ✨");
     setCustomScratch(localStorage.getItem('custom-scratch') || "You're not just a friend — you're family I chose 💖");
+    setSupabaseUrl(localStorage.getItem('supabase-url') || '');
+    setSupabaseKey(localStorage.getItem('supabase-key') || '');
+
+    // Supabase cloud synchronization
+    const sUrl = localStorage.getItem('supabase-url');
+    const sKey = localStorage.getItem('supabase-key');
+    if (sUrl && sKey) {
+      fetch(`${sUrl}/rest/v1/birthday_data?order=created_at.desc`, {
+        headers: {
+          'apikey': sKey,
+          'Authorization': `Bearer ${sKey}`
+        }
+      })
+      .then(res => {
+        if (!res.ok) throw new Error("Sync failed");
+        return res.json();
+      })
+      .then(data => {
+        const fetchedWishes = data.filter(item => item.type === 'wish').map(item => item.payload);
+        const fetchedVoices = data.filter(item => item.type === 'voice').map(item => item.payload);
+        const fetchedScores = data.filter(item => item.type === 'quiz').map(item => item.payload);
+        const fetchedLogs = data.filter(item => item.type === 'log').map(item => item.payload);
+
+        if (fetchedWishes.length > 0) {
+          setWishes(fetchedWishes);
+          localStorage.setItem('birthday-wishes', JSON.stringify(fetchedWishes));
+        }
+        if (fetchedVoices.length > 0) {
+          setVoiceNotes(fetchedVoices);
+          localStorage.setItem('birthday-voice-notes', JSON.stringify(fetchedVoices));
+        }
+        if (fetchedScores.length > 0) {
+          setQuizScores(fetchedScores);
+          localStorage.setItem('birthday-quiz-attempts', JSON.stringify(fetchedScores));
+        }
+        if (fetchedLogs.length > 0) {
+          setActivityLogs(fetchedLogs);
+          localStorage.setItem('birthday-activity', JSON.stringify(fetchedLogs));
+        }
+      })
+      .catch(err => console.log("Creator Dashboard Supabase sync deferred:", err));
+    }
   }, []);
 
   useEffect(() => {
@@ -2206,6 +2353,19 @@ function CreatorDashboard({ setViewMode }) {
     const updated = wishes.filter(w => w.id !== id);
     setWishes(updated);
     localStorage.setItem('birthday-wishes', JSON.stringify(updated));
+
+    // Supabase Delete Sync
+    const sUrl = localStorage.getItem('supabase-url');
+    const sKey = localStorage.getItem('supabase-key');
+    if (sUrl && sKey) {
+      fetch(`${sUrl}/rest/v1/birthday_data?payload->>id=eq.${id}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': sKey,
+          'Authorization': `Bearer ${sKey}`
+        }
+      }).catch(err => console.error("Cloud deletion failed:", err));
+    }
   };
 
   const deleteVoiceNote = (id) => {
@@ -2213,15 +2373,61 @@ function CreatorDashboard({ setViewMode }) {
     const updated = voiceNotes.filter(v => v.id !== id);
     setVoiceNotes(updated);
     localStorage.setItem('birthday-voice-notes', JSON.stringify(updated));
+
+    // Supabase Delete Sync
+    const sUrl = localStorage.getItem('supabase-url');
+    const sKey = localStorage.getItem('supabase-key');
+    if (sUrl && sKey) {
+      fetch(`${sUrl}/rest/v1/birthday_data?payload->>id=eq.${id}`, {
+        method: 'DELETE',
+        headers: {
+          'apikey': sKey,
+          'Authorization': `Bearer ${sKey}`
+        }
+      }).catch(err => console.error("Cloud deletion failed:", err));
+    }
   };
 
   const saveCustomSettings = () => {
+    const trimmedUrl = supabaseUrl.trim();
+    const trimmedKey = supabaseKey.trim();
+
     localStorage.setItem('custom-gateway-pass', customPass.trim());
     localStorage.setItem('custom-typewriter', customTypewriter.trim());
     localStorage.setItem('custom-scratch', customScratch.trim());
+    localStorage.setItem('supabase-url', trimmedUrl);
+    localStorage.setItem('supabase-key', trimmedKey);
 
-    setSaveStatus('Settings updated successfully! ✨');
-    setTimeout(() => setSaveStatus(''), 3000);
+    // If new Supabase settings are added, upload all current local database entries
+    if (trimmedUrl && trimmedKey) {
+      const wishesToSync = JSON.parse(localStorage.getItem('birthday-wishes') || '[]');
+      const voicesToSync = JSON.parse(localStorage.getItem('birthday-voice-notes') || '[]');
+      const scoresToSync = JSON.parse(localStorage.getItem('birthday-quiz-attempts') || '[]');
+      const logsToSync = JSON.parse(localStorage.getItem('birthday-activity') || '[]');
+
+      const allItems = [
+        ...wishesToSync.map(w => ({ type: 'wish', payload: w })),
+        ...voicesToSync.map(v => ({ type: 'voice', payload: v })),
+        ...scoresToSync.map(s => ({ type: 'quiz', payload: s })),
+        ...logsToSync.map(l => ({ type: 'log', payload: l }))
+      ];
+
+      allItems.forEach(item => {
+        fetch(`${trimmedUrl}/rest/v1/birthday_data`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': trimmedKey,
+            'Authorization': `Bearer ${trimmedKey}`,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify(item)
+        }).catch(e => console.error("Sync migration error:", e));
+      });
+    }
+
+    setSaveStatus('Settings updated & Cloud sync successfully activated! ✨');
+    setTimeout(() => setSaveStatus(''), 4000);
   };
 
   const clearAllLogs = () => {
@@ -2492,6 +2698,61 @@ function CreatorDashboard({ setViewMode }) {
                   className="input-modern h-28 resize-none"
                   placeholder="Enter custom love note for typewriter..."
                 />
+              </div>
+
+              <div className="p-6 rounded-3xl bg-pink-500/5 border border-pink-500/10 space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xl">🌐</span>
+                  <h4 className="text-sm font-bold text-pink-300 uppercase tracking-widest">Cross-Device Cloud Sync (Optional)</h4>
+                </div>
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  To sync wishes, voice notes, and quiz scores in real-time across your computer, your phone, and her phone, set up a free project on <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-pink-400 hover:underline">Supabase</a>, run the SQL command below in their SQL Editor, and paste your credentials!
+                </p>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-wider mb-1.5">
+                      Supabase Project URL
+                    </label>
+                    <input
+                      type="text"
+                      value={supabaseUrl}
+                      onChange={(e) => setSupabaseUrl(e.target.value)}
+                      className="input-modern text-xs"
+                      placeholder="https://your-project.supabase.co"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-wider mb-1.5">
+                      Supabase Public Anon Key
+                    </label>
+                    <input
+                      type="password"
+                      value={supabaseKey}
+                      onChange={(e) => setSupabaseKey(e.target.value)}
+                      className="input-modern text-xs"
+                      placeholder="eyJhbGciOi..."
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-wider mb-1.5">
+                    SQL command to paste into Supabase SQL Editor:
+                  </label>
+                  <pre className="p-3 bg-black/50 text-[10px] text-pink-200/90 font-mono rounded-xl border border-white/5 overflow-x-auto select-all max-h-24">
+{`CREATE TABLE IF NOT EXISTS birthday_data (
+  id bigint PRIMARY KEY GENERATED BY DEFAULT AS IDENTITY,
+  type text NOT NULL,
+  payload jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+ALTER TABLE birthday_data ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read access" ON birthday_data FOR SELECT USING (true);
+CREATE POLICY "Allow public insert access" ON birthday_data FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public delete access" ON birthday_data FOR DELETE USING (true);`}
+                  </pre>
+                </div>
               </div>
 
               <div className="flex justify-between items-center pt-4 border-t border-white/5">
