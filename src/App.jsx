@@ -425,13 +425,26 @@ function PhotoGallery({ photos }) {
 
 // Wishes Wall
 function WishesWall({ logActivity }) {
-  const [newWish, setNewWish] = useState({ name: '', message: '' });
+  const [newWish, setNewWish] = useState({ 
+    name: localStorage.getItem('birthday-guest-name') || '', 
+    message: '' 
+  });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const savedName = localStorage.getItem('birthday-guest-name');
+    if (savedName) {
+      setNewWish(prev => ({ ...prev, name: savedName }));
+    }
+  }, [submitted]);
 
   const addWish = () => {
     if (!newWish.name.trim() || !newWish.message.trim()) return;
     setLoading(true);
+
+    // Save name globally so they don't have to retype it elsewhere!
+    localStorage.setItem('birthday-guest-name', newWish.name.trim());
 
     const wish = {
       id: Date.now(),
@@ -602,9 +615,17 @@ function MemoryQuiz({ logActivity }) {
   const [selected, setSelected] = useState(null);
   const [quizComplete, setQuizComplete] = useState(false);
 
-  const [playerName, setPlayerName] = useState('');
+  const [playerName, setPlayerName] = useState(localStorage.getItem('birthday-guest-name') || '');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Sync saved name when quiz completes
+  useEffect(() => {
+    if (quizComplete) {
+      const savedName = localStorage.getItem('birthday-guest-name');
+      if (savedName) setPlayerName(savedName);
+    }
+  }, [quizComplete]);
 
   const handleAnswer = (index) => {
     if (selected !== null) return;
@@ -629,7 +650,7 @@ function MemoryQuiz({ logActivity }) {
     setScore(0);
     setSelected(null);
     setQuizComplete(false);
-    setPlayerName('');
+    setPlayerName(localStorage.getItem('birthday-guest-name') || '');
     setSubmitted(false);
     setLoading(false);
   };
@@ -637,6 +658,9 @@ function MemoryQuiz({ logActivity }) {
   const submitScore = () => {
     if (!playerName.trim()) return;
     setLoading(true);
+
+    // Save name globally so they don't have to retype it elsewhere!
+    localStorage.setItem('birthday-guest-name', playerName.trim());
 
     const percentage = (score / questions.length) * 100;
     const newAttempt = {
@@ -823,7 +847,13 @@ function VoiceMessage({ logActivity, onRecordStart }) {
   const [micError, setMicError] = useState(null);
   const [micLevel, setMicLevel] = useState(0);
 
-  const [senderName, setSenderName] = useState('');
+  const [senderName, setSenderName] = useState(localStorage.getItem('birthday-guest-name') || '');
+
+  // Sync saved name when audio URL loads
+  useEffect(() => {
+    const savedName = localStorage.getItem('birthday-guest-name');
+    if (savedName) setSenderName(savedName);
+  }, [audioURL]);
 
   const audioContextRef = useRef(null);
   const animationFrameRef = useRef(null);
@@ -916,6 +946,9 @@ function VoiceMessage({ logActivity, onRecordStart }) {
   const saveVoiceMessage = () => {
     if (recordedChunks.length === 0 || !senderName.trim()) return;
     setSaving(true);
+
+    // Save name globally so they don't have to retype it elsewhere!
+    localStorage.setItem('birthday-guest-name', senderName.trim());
 
     const blob = new Blob(recordedChunks, { type: recordedMime });
     const reader = new FileReader();
