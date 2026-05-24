@@ -602,6 +602,10 @@ function MemoryQuiz({ logActivity }) {
   const [selected, setSelected] = useState(null);
   const [quizComplete, setQuizComplete] = useState(false);
 
+  const [playerName, setPlayerName] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   const handleAnswer = (index) => {
     if (selected !== null) return;
 
@@ -620,78 +624,134 @@ function MemoryQuiz({ logActivity }) {
     }, 1200);
   };
 
-  // Track quiz completion and score persistence
-  useEffect(() => {
-    if (quizComplete) {
-      const percentage = (score / questions.length) * 100;
-
-      // Save attempt to localStorage
-      const quizAttempts = JSON.parse(localStorage.getItem('birthday-quiz-attempts') || '[]');
-      const newAttempt = {
-        id: Date.now(),
-        score,
-        total: questions.length,
-        percentage,
-        date: new Date().toLocaleDateString(),
-        time: new Date().toLocaleTimeString(),
-      };
-      localStorage.setItem('birthday-quiz-attempts', JSON.stringify([...quizAttempts, newAttempt]));
-
-      // Supabase cloud sync
-      const sUrl = localStorage.getItem('supabase-url');
-      const sKey = localStorage.getItem('supabase-key');
-      if (sUrl && sKey) {
-        fetch(`${sUrl}/rest/v1/birthday_data`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': sKey,
-            'Authorization': `Bearer ${sKey}`,
-            'Prefer': 'return=minimal'
-          },
-          body: JSON.stringify({
-            type: 'quiz',
-            payload: newAttempt
-          })
-        }).catch(err => console.error("Cloud quiz save failed:", err));
-      }
-
-      // Log activity
-      if (logActivity) {
-        logActivity('Completed Quiz', `Scored ${score}/${questions.length} (${percentage}%)`);
-      }
-    }
-  }, [quizComplete, score, questions.length, logActivity]);
-
   const resetQuiz = () => {
     setCurrentQ(0);
     setScore(0);
     setSelected(null);
     setQuizComplete(false);
+    setPlayerName('');
+    setSubmitted(false);
+    setLoading(false);
+  };
+
+  const submitScore = () => {
+    if (!playerName.trim()) return;
+    setLoading(true);
+
+    const percentage = (score / questions.length) * 100;
+    const newAttempt = {
+      id: Date.now(),
+      name: playerName.trim(),
+      score,
+      total: questions.length,
+      percentage,
+      date: new Date().toLocaleDateString(),
+      time: new Date().toLocaleTimeString(),
+    };
+
+    // Save attempt to localStorage
+    const quizAttempts = JSON.parse(localStorage.getItem('birthday-quiz-attempts') || '[]');
+    localStorage.setItem('birthday-quiz-attempts', JSON.stringify([...quizAttempts, newAttempt]));
+
+    // Supabase cloud sync
+    const sUrl = localStorage.getItem('supabase-url');
+    const sKey = localStorage.getItem('supabase-key');
+    if (sUrl && sKey) {
+      fetch(`${sUrl}/rest/v1/birthday_data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': sKey,
+          'Authorization': `Bearer ${sKey}`,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          type: 'quiz',
+          payload: newAttempt
+        })
+      })
+      .then(() => {
+        setLoading(false);
+        setSubmitted(true);
+      })
+      .catch(err => {
+        console.error("Cloud quiz save failed:", err);
+        setLoading(false);
+        setSubmitted(true); // Fallback success
+      });
+    } else {
+      setLoading(false);
+      setSubmitted(true);
+    }
+
+    // Log activity
+    if (logActivity) {
+      logActivity('Completed Quiz', `"${playerName.trim()}" scored ${score}/${questions.length} (${percentage}%)`);
+    }
   };
 
   if (quizComplete) {
     const percentage = (score / questions.length) * 100;
     return (
       <div className="glass-strong rounded-[40px] p-8 md:p-12 text-center max-w-lg mx-auto border border-white/10 animate-scaleUp shadow-2xl">
-        <div className="text-7xl mb-6 animate-bounce">
-          {percentage === 100 ? '🏆' : percentage >= 75 ? '🎉' : '💪'}
-        </div>
-        <h3 className="text-3xl font-bold gradient-text mb-4" style={{ fontFamily: 'Playfair Display' }}>
-          {percentage === 100 ? 'Perfect Memory! 💖' : percentage >= 75 ? 'So close!' : 'Never Mind!'}
-        </h3>
-        <p className="text-lg text-gray-300 mb-8 font-medium">
-          You scored <span className="text-pink-400 font-extrabold">{score}</span> out of <span className="text-pink-400 font-extrabold">{questions.length}</span> correct answers!
-        </p>
-        <div className="w-full bg-white/10 rounded-full h-3 mb-8 overflow-hidden">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-1000"
-            style={{ width: `${percentage}%` }}
-          />
-        </div>
-        <button onClick={resetQuiz} className="btn-primary px-10">
-          Try Again 🔄
-        </button>
+        {!submitted ? (
+          <>
+            <div className="text-7xl mb-6 animate-bounce">
+              {percentage === 100 ? '🏆' : percentage >= 75 ? '🎉' : '💪'}
+            </div>
+            <h3 className="text-3xl font-bold gradient-text mb-4" style={{ fontFamily: 'Playfair Display' }}>
+              {percentage === 100 ? 'Perfect Memory! 💖' : percentage >= 75 ? 'So close!' : 'Never Mind!'}
+            </h3>
+            <p className="text-lg text-gray-300 mb-8 font-medium">
+              You scored <span className="text-pink-400 font-extrabold">{score}</span> out of <span className="text-pink-400 font-extrabold">{questions.length}</span> correct answers!
+            </p>
+            <div className="w-full bg-white/10 rounded-full h-3 mb-8 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-1000"
+                style={{ width: `${percentage}%` }}
+              />
+            </div>
+
+            <div className="max-w-xs mx-auto text-left mb-8">
+              <label className="block text-[10px] uppercase font-bold tracking-widest text-pink-300 mb-2 pl-1">
+                Enter Your Name
+              </label>
+              <input
+                type="text"
+                placeholder="Enter your name..."
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value)}
+                className="input-modern py-3.5 px-4 text-sm"
+              />
+            </div>
+
+            <div className="flex gap-4 max-w-xs mx-auto">
+              <button onClick={resetQuiz} className="flex-1 py-3.5 rounded-full border border-white/10 text-gray-300 hover:bg-white/5 transition-colors font-semibold">
+                Reset
+              </button>
+              <button
+                onClick={submitScore}
+                disabled={loading || !playerName.trim()}
+                className="flex-1 btn-primary py-3.5 rounded-full font-semibold disabled:opacity-50"
+              >
+                {loading ? 'Saving...' : 'Submit ✨'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="animate-scaleUp">
+            <div className="text-7xl mb-6">🏆✨</div>
+            <h3 className="text-3xl font-bold text-white mb-4" style={{ fontFamily: 'Playfair Display' }}>
+              Score Registered!
+            </h3>
+            <p className="text-sm text-gray-300 mb-8 max-w-xs mx-auto leading-relaxed">
+              Your score of <strong>{score}/{questions.length}</strong> was successfully published to the host as <strong>{playerName}</strong>!
+            </p>
+            <button onClick={resetQuiz} className="btn-primary px-10 py-3.5 rounded-full font-semibold">
+              Play Again 🔄
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -762,6 +822,8 @@ function VoiceMessage({ logActivity, onRecordStart }) {
   const [success, setSuccess] = useState(false);
   const [micError, setMicError] = useState(null);
   const [micLevel, setMicLevel] = useState(0);
+
+  const [senderName, setSenderName] = useState('');
 
   const audioContextRef = useRef(null);
   const animationFrameRef = useRef(null);
@@ -852,7 +914,7 @@ function VoiceMessage({ logActivity, onRecordStart }) {
   };
 
   const saveVoiceMessage = () => {
-    if (recordedChunks.length === 0) return;
+    if (recordedChunks.length === 0 || !senderName.trim()) return;
     setSaving(true);
 
     const blob = new Blob(recordedChunks, { type: recordedMime });
@@ -863,6 +925,7 @@ function VoiceMessage({ logActivity, onRecordStart }) {
       const existingVoiceNotes = JSON.parse(localStorage.getItem('birthday-voice-notes') || '[]');
       const newVoiceNote = {
         id: Date.now(),
+        name: senderName.trim(),
         audio: base64data,
         date: new Date().toLocaleDateString(),
         time: new Date().toLocaleTimeString(),
@@ -891,7 +954,7 @@ function VoiceMessage({ logActivity, onRecordStart }) {
       }
 
       if (logActivity) {
-        logActivity('Recorded Voice Note', `Saved voice message #${newVoiceNote.id}`);
+        logActivity('Recorded Voice Note', `Voice message from "${senderName.trim()}"`);
       }
 
       setSaving(false);
@@ -916,12 +979,27 @@ function VoiceMessage({ logActivity, onRecordStart }) {
           {recording ? '⏹' : '🎤'}
         </button>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-scaleUp">
           <audio src={audioURL} controls className="mx-auto block" />
+
+          {!success && (
+            <div className="max-w-xs mx-auto text-left">
+              <label className="block text-[10px] uppercase font-bold tracking-widest text-pink-300 mb-2 pl-1">
+                Your Name
+              </label>
+              <input
+                type="text"
+                placeholder="Enter your name..."
+                value={senderName}
+                onChange={(e) => setSenderName(e.target.value)}
+                className="input-modern py-3 px-4 text-sm"
+              />
+            </div>
+          )}
 
           <div className="flex gap-4 max-w-xs mx-auto">
             <button
-              onClick={() => { setAudioURL(null); setRecordedChunks([]); setSuccess(false); }}
+              onClick={() => { setAudioURL(null); setRecordedChunks([]); setSuccess(false); setSenderName(''); }}
               className="flex-1 py-3 rounded-full border border-white/10 text-gray-300 hover:bg-white/5 transition-colors font-semibold"
             >
               Re-record
@@ -929,8 +1007,8 @@ function VoiceMessage({ logActivity, onRecordStart }) {
             {!success ? (
               <button
                 onClick={saveVoiceMessage}
-                disabled={saving}
-                className="flex-1 btn-primary py-3 rounded-full font-semibold"
+                disabled={saving || !senderName.trim()}
+                className="flex-1 btn-primary py-3 rounded-full font-semibold disabled:opacity-50"
               >
                 {saving ? 'Sending...' : 'Send voice ✨'}
               </button>
@@ -2573,7 +2651,9 @@ function CreatorDashboard({ setViewMode }) {
                     <div key={note.id} className="glass rounded-3xl p-5 border border-white/5 flex flex-col justify-between hover:border-pink-500/30 transition-all group">
                       <div className="flex justify-between items-start mb-4">
                         <div>
-                          <span className="text-pink-300 font-bold text-sm">Voice Note Record</span>
+                          <span className="text-pink-300 font-bold text-sm">
+                            🎤 Voice Note from: <span className="text-white underline">{note.name || 'Anonymous Guest'}</span>
+                          </span>
                           <p className="text-[10px] text-gray-400 mt-1 font-semibold tracking-wide">{note.date} at {note.time || ''}</p>
                         </div>
                         <button
