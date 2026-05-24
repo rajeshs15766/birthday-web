@@ -1662,8 +1662,9 @@ function WebsiteContent({ setViewMode }) {
 
   const audioRef = useRef(null);
 
-  // Load custom dashboard overrides
+  // Load custom settings & gallery photos dynamically from Supabase (Source of Truth)
   useEffect(() => {
+    // 1. First apply any local storage cached copies for instant local paint
     const savedPass = localStorage.getItem('custom-gateway-pass');
     if (savedPass) setGatewayPass(savedPass);
 
@@ -1673,11 +1674,54 @@ function WebsiteContent({ setViewMode }) {
     const savedScratch = localStorage.getItem('custom-scratch');
     if (savedScratch) setScratchCardSecret(savedScratch);
 
+    const savedPhotos = localStorage.getItem('birthday-gallery-photos');
+    if (savedPhotos) setPhotos(JSON.parse(savedPhotos));
+
+    // 2. Fetch live settings update directly from Supabase database
+    const sUrl = localStorage.getItem('supabase-url');
+    const sKey = localStorage.getItem('supabase-key');
+    
     const loadPhotos = () => {
-      const savedPhotos = localStorage.getItem('birthday-gallery-photos');
-      if (savedPhotos) setPhotos(JSON.parse(savedPhotos));
+      const sp = localStorage.getItem('birthday-gallery-photos');
+      if (sp) setPhotos(JSON.parse(sp));
     };
-    loadPhotos();
+
+    if (sUrl && sKey) {
+      fetch(`${sUrl}/rest/v1/birthday_data?type=eq.settings&order=created_at.desc&limit=1`, {
+        headers: {
+          'apikey': sKey,
+          'Authorization': `Bearer ${sKey}`
+        }
+      })
+      .then(res => {
+        if (!res.ok) throw new Error("Fetch settings error");
+        return res.json();
+      })
+      .then(data => {
+        if (data && data.length > 0) {
+          const config = data[0].payload;
+          if (config.gatewayPass) {
+            setGatewayPass(config.gatewayPass);
+            localStorage.setItem('custom-gateway-pass', config.gatewayPass);
+          }
+          if (config.typewriterStoryText) {
+            setTypewriterStoryText(config.typewriterStoryText);
+            localStorage.setItem('custom-typewriter', config.typewriterStoryText);
+          }
+          if (config.scratchCardSecret) {
+            setScratchCardSecret(config.scratchCardSecret);
+            localStorage.setItem('custom-scratch', config.scratchCardSecret);
+          }
+          if (config.photos) {
+            setPhotos(config.photos);
+            localStorage.setItem('birthday-gallery-photos', JSON.stringify(config.photos));
+          }
+        }
+      })
+      .catch(err => {
+        console.error("Cloud configuration fetch failed. Reverting to local storage:", err);
+      });
+    }
 
     window.addEventListener('birthday-gallery-updated', loadPhotos);
     return () => window.removeEventListener('birthday-gallery-updated', loadPhotos);
@@ -2482,6 +2526,28 @@ function CreatorDashboard({ setViewMode }) {
           setActivityLogs(fetchedLogs);
           localStorage.setItem('birthday-activity', JSON.stringify(fetchedLogs));
         }
+
+        // Fetch cloud settings if present!
+        const settingsRow = data.find(item => item.type === 'settings');
+        if (settingsRow && settingsRow.payload) {
+          const config = settingsRow.payload;
+          if (config.gatewayPass) {
+            setCustomPass(config.gatewayPass);
+            localStorage.setItem('custom-gateway-pass', config.gatewayPass);
+          }
+          if (config.typewriterStoryText) {
+            setCustomTypewriter(config.typewriterStoryText);
+            localStorage.setItem('custom-typewriter', config.typewriterStoryText);
+          }
+          if (config.scratchCardSecret) {
+            setCustomScratch(config.scratchCardSecret);
+            localStorage.setItem('custom-scratch', config.scratchCardSecret);
+          }
+          if (config.photos) {
+            setCustomPhotos(config.photos);
+            localStorage.setItem('birthday-gallery-photos', JSON.stringify(config.photos));
+          }
+        }
       })
       .catch(err => console.log("Creator Dashboard Supabase sync deferred:", err));
     }
@@ -2551,6 +2617,45 @@ function CreatorDashboard({ setViewMode }) {
     }
   };
 
+  const syncSettingsToCloud = (updatedPhotos, typewriter, scratch, passcode) => {
+    const sUrl = localStorage.getItem('supabase-url');
+    const sKey = localStorage.getItem('supabase-key');
+    if (!sUrl || !sKey) return;
+
+    const configPayload = {
+      gatewayPass: passcode || customPass,
+      typewriterStoryText: typewriter || customTypewriter,
+      scratchCardSecret: scratch || customScratch,
+      photos: updatedPhotos || customPhotos
+    };
+
+    // Deletes previous configuration records to prevent duplicates and keep the DB clean
+    fetch(`${sUrl}/rest/v1/birthday_data?type=eq.settings`, {
+      method: 'DELETE',
+      headers: {
+        'apikey': sKey,
+        'Authorization': `Bearer ${sKey}`
+      }
+    })
+    .then(() => {
+      // Inserts the new clean updated settings
+      return fetch(`${sUrl}/rest/v1/birthday_data`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': sKey,
+          'Authorization': `Bearer ${sKey}`,
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          type: 'settings',
+          payload: configPayload
+        })
+      });
+    })
+    .catch(err => console.error("Supabase cloud settings sync failed:", err));
+  };
+
   const addCustomPhoto = () => {
     if (!newPhoto.src.trim() || !newPhoto.caption.trim() || !newPhoto.date.trim()) return;
     const updated = [...customPhotos, {
@@ -2562,6 +2667,9 @@ function CreatorDashboard({ setViewMode }) {
     localStorage.setItem('birthday-gallery-photos', JSON.stringify(updated));
     setNewPhoto({ src: '', caption: '', date: '' });
     window.dispatchEvent(new Event('birthday-gallery-updated'));
+
+    // Sync changes to cloud
+    syncSettingsToCloud(updated);
   };
 
   const handleImageUpload = (e) => {
@@ -2601,6 +2709,9 @@ function CreatorDashboard({ setViewMode }) {
     setCustomPhotos(updated);
     localStorage.setItem('birthday-gallery-photos', JSON.stringify(updated));
     window.dispatchEvent(new Event('birthday-gallery-updated'));
+
+    // Sync changes to cloud
+    syncSettingsToCloud(updated);
   };
 
   const saveCustomSettings = () => {
@@ -2612,6 +2723,9 @@ function CreatorDashboard({ setViewMode }) {
     localStorage.setItem('custom-scratch', customScratch.trim());
     localStorage.setItem('supabase-url', trimmedUrl);
     localStorage.setItem('supabase-key', trimmedKey);
+
+    // Sync settings & gallery photos together to Supabase
+    syncSettingsToCloud(customPhotos, customTypewriter.trim(), customScratch.trim(), customPass.trim());
 
     // If new Supabase settings are added, upload all current local database entries
     if (trimmedUrl && trimmedKey) {
