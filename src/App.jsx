@@ -425,30 +425,28 @@ function PhotoGallery({ photos }) {
 
 // Wishes Wall
 function WishesWall({ logActivity }) {
-  const [newWish, setNewWish] = useState({ 
-    name: localStorage.getItem('birthday-guest-name') || '', 
-    message: '' 
-  });
+  const [savedName, setSavedName] = useState(localStorage.getItem('birthday-guest-name') || '');
+  const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const savedName = localStorage.getItem('birthday-guest-name');
-    if (savedName) {
-      setNewWish(prev => ({ ...prev, name: savedName }));
-    }
-  }, [submitted]);
+    const handleUpdate = () => {
+      setSavedName(localStorage.getItem('birthday-guest-name') || '');
+    };
+    window.addEventListener('guest-name-updated', handleUpdate);
+    return () => window.removeEventListener('guest-name-updated', handleUpdate);
+  }, []);
 
   const addWish = () => {
-    if (!newWish.name.trim() || !newWish.message.trim()) return;
+    if (!message.trim()) return;
+    const finalName = localStorage.getItem('birthday-guest-name') || savedName || 'Guest';
     setLoading(true);
-
-    // Save name globally so they don't have to retype it elsewhere!
-    localStorage.setItem('birthday-guest-name', newWish.name.trim());
 
     const wish = {
       id: Date.now(),
-      ...newWish,
+      name: finalName.trim(),
+      message: message.trim(),
       date: new Date().toLocaleDateString(),
       time: new Date().toLocaleTimeString(),
       color: ['#ff69b4', '#9370db', '#00ced1', '#ffd700', '#ff6347'][Math.floor(Math.random() * 5)]
@@ -494,8 +492,26 @@ function WishesWall({ logActivity }) {
       logActivity('Left Birthday Wish', `Name: "${wish.name}" left a wish saying: "${wish.message}"`);
     }
 
-    setNewWish({ name: '', message: '' });
+    setMessage('');
   };
+
+  if (!savedName) {
+    return (
+      <div className="glass-strong rounded-[40px] p-8 md:p-12 text-center max-w-lg mx-auto border border-white/10 shadow-2xl animate-scaleUp">
+        <div className="text-5xl mb-4 select-none">🔒</div>
+        <h3 className="text-xl font-bold text-white mb-2" style={{ fontFamily: 'Playfair Display' }}>Secret Wishing Box is Locked</h3>
+        <p className="text-sm text-gray-400 mb-6 leading-relaxed">
+          Please enter your name in the **Memory Quiz** section first to unlock leaving birthday wishes! 🧠✨
+        </p>
+        <a
+          href="#quiz"
+          className="inline-block bg-pink-500 text-white font-bold text-xs py-2.5 px-6 rounded-full hover:scale-105 active:scale-95 transition-all uppercase tracking-wider"
+        >
+          Go to Memory Quiz 🧠
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-xl mx-auto px-4">
@@ -516,17 +532,8 @@ function WishesWall({ logActivity }) {
           </div>
 
           <div className="space-y-4 relative z-10">
-            <div>
-              <label className="block text-[10px] uppercase font-bold tracking-widest text-pink-300 mb-2 pl-1">
-                Your Beautiful Name
-              </label>
-              <input
-                type="text"
-                placeholder="Enter your name..."
-                value={newWish.name}
-                onChange={(e) => setNewWish({ ...newWish, name: e.target.value })}
-                className="input-modern"
-              />
+            <div className="p-3 bg-pink-500/10 border border-pink-500/20 rounded-2xl text-xs text-pink-300 font-bold tracking-wide">
+              ✍️ Writing wish as: <span className="text-white underline">{savedName}</span>
             </div>
 
             <div>
@@ -535,15 +542,15 @@ function WishesWall({ logActivity }) {
               </label>
               <textarea
                 placeholder="Write something sweet and memorable for her special day..."
-                value={newWish.message}
-                onChange={(e) => setNewWish({ ...newWish, message: e.target.value })}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
                 className="input-modern h-32 resize-none"
               />
             </div>
 
             <button
               onClick={addWish}
-              disabled={loading || !newWish.name.trim() || !newWish.message.trim()}
+              disabled={loading || !message.trim()}
               className="btn-primary w-full py-4 text-sm font-bold tracking-wider uppercase mt-4 flex items-center justify-center gap-2"
             >
               {loading ? (
@@ -616,6 +623,8 @@ function MemoryQuiz({ logActivity }) {
   const [quizComplete, setQuizComplete] = useState(false);
 
   const [playerName, setPlayerName] = useState(localStorage.getItem('birthday-guest-name') || '');
+  const [guestNameSaved, setGuestNameSaved] = useState(!!localStorage.getItem('birthday-guest-name'));
+  const [autoSubmitted, setAutoSubmitted] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -626,6 +635,66 @@ function MemoryQuiz({ logActivity }) {
       if (savedName) setPlayerName(savedName);
     }
   }, [quizComplete]);
+
+  // Autosave and submit score immediately on completion
+  useEffect(() => {
+    if (quizComplete && !autoSubmitted) {
+      setAutoSubmitted(true);
+      setLoading(true);
+
+      const finalName = localStorage.getItem('birthday-guest-name') || playerName.trim() || 'Guest';
+      const percentage = (score / questions.length) * 100;
+      const newAttempt = {
+        id: Date.now(),
+        name: finalName.trim(),
+        score,
+        total: questions.length,
+        percentage,
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString(),
+      };
+
+      // Save attempt to localStorage
+      const quizAttempts = JSON.parse(localStorage.getItem('birthday-quiz-attempts') || '[]');
+      localStorage.setItem('birthday-quiz-attempts', JSON.stringify([...quizAttempts, newAttempt]));
+
+      // Supabase cloud sync
+      const sUrl = localStorage.getItem('supabase-url');
+      const sKey = localStorage.getItem('supabase-key');
+      if (sUrl && sKey) {
+        fetch(`${sUrl}/rest/v1/birthday_data`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': sKey,
+            'Authorization': `Bearer ${sKey}`,
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify({
+            type: 'quiz',
+            payload: newAttempt
+          })
+        })
+        .then(() => {
+          setLoading(false);
+          setSubmitted(true);
+        })
+        .catch(err => {
+          console.error("Cloud quiz save failed:", err);
+          setLoading(false);
+          setSubmitted(true); // Fallback success
+        });
+      } else {
+        setLoading(false);
+        setSubmitted(true);
+      }
+
+      // Log activity
+      if (logActivity) {
+        logActivity('Completed Quiz', `"${finalName.trim()}" scored ${score}/${questions.length} (${percentage}%)`);
+      }
+    }
+  }, [quizComplete, autoSubmitted, score, questions.length, logActivity, playerName]);
 
   const handleAnswer = (index) => {
     if (selected !== null) return;
@@ -650,132 +719,75 @@ function MemoryQuiz({ logActivity }) {
     setScore(0);
     setSelected(null);
     setQuizComplete(false);
-    setPlayerName(localStorage.getItem('birthday-guest-name') || '');
+    setAutoSubmitted(false);
     setSubmitted(false);
     setLoading(false);
   };
 
-  const submitScore = () => {
-    if (!playerName.trim()) return;
-    setLoading(true);
-
-    // Save name globally so they don't have to retype it elsewhere!
-    localStorage.setItem('birthday-guest-name', playerName.trim());
-
-    const percentage = (score / questions.length) * 100;
-    const newAttempt = {
-      id: Date.now(),
-      name: playerName.trim(),
-      score,
-      total: questions.length,
-      percentage,
-      date: new Date().toLocaleDateString(),
-      time: new Date().toLocaleTimeString(),
-    };
-
-    // Save attempt to localStorage
-    const quizAttempts = JSON.parse(localStorage.getItem('birthday-quiz-attempts') || '[]');
-    localStorage.setItem('birthday-quiz-attempts', JSON.stringify([...quizAttempts, newAttempt]));
-
-    // Supabase cloud sync
-    const sUrl = localStorage.getItem('supabase-url');
-    const sKey = localStorage.getItem('supabase-key');
-    if (sUrl && sKey) {
-      fetch(`${sUrl}/rest/v1/birthday_data`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': sKey,
-          'Authorization': `Bearer ${sKey}`,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify({
-          type: 'quiz',
-          payload: newAttempt
-        })
-      })
-      .then(() => {
-        setLoading(false);
-        setSubmitted(true);
-      })
-      .catch(err => {
-        console.error("Cloud quiz save failed:", err);
-        setLoading(false);
-        setSubmitted(true); // Fallback success
-      });
-    } else {
-      setLoading(false);
-      setSubmitted(true);
-    }
-
-    // Log activity
-    if (logActivity) {
-      logActivity('Completed Quiz', `"${playerName.trim()}" scored ${score}/${questions.length} (${percentage}%)`);
-    }
-  };
+  if (!guestNameSaved) {
+    return (
+      <div className="glass-strong rounded-[40px] p-8 md:p-12 text-center max-w-lg mx-auto border border-white/10 shadow-2xl animate-scaleUp">
+        <div className="text-7xl mb-6 select-none">🧠🏆</div>
+        <h3 className="text-3xl font-bold gradient-text mb-3" style={{ fontFamily: 'Playfair Display' }}>Unlock the Surprise</h3>
+        <p className="text-sm text-gray-400 mb-8 leading-relaxed">
+          Please enter your name to unlock the memory quiz, secret wishing box, and voice message notes! 💖
+        </p>
+        <div className="max-w-xs mx-auto text-left mb-6">
+          <label className="block text-[10px] uppercase font-bold tracking-widest text-pink-300 mb-2 pl-1">
+            Your Name
+          </label>
+          <input
+            type="text"
+            placeholder="Enter your name to unlock..."
+            value={playerName}
+            onChange={(e) => setPlayerName(e.target.value)}
+            className="input-modern py-3.5 px-4 text-sm"
+          />
+        </div>
+        <button
+          onClick={() => {
+            if (playerName.trim()) {
+              localStorage.setItem('birthday-guest-name', playerName.trim());
+              setGuestNameSaved(true);
+              // Dispatch an event to let other components know the name has been saved!
+              window.dispatchEvent(new Event('guest-name-updated'));
+            }
+          }}
+          disabled={!playerName.trim()}
+          className="btn-primary w-full max-w-xs py-3.5 rounded-full font-bold shadow-lg hover:scale-105 active:scale-95 disabled:opacity-50"
+        >
+          Unlock & Start Quiz 🚀
+        </button>
+      </div>
+    );
+  }
 
   if (quizComplete) {
     const percentage = (score / questions.length) * 100;
+    const finalName = localStorage.getItem('birthday-guest-name') || 'Guest';
     return (
       <div className="glass-strong rounded-[40px] p-8 md:p-12 text-center max-w-lg mx-auto border border-white/10 animate-scaleUp shadow-2xl">
-        {!submitted ? (
-          <>
-            <div className="text-7xl mb-6 animate-bounce">
-              {percentage === 100 ? '🏆' : percentage >= 75 ? '🎉' : '💪'}
-            </div>
-            <h3 className="text-3xl font-bold gradient-text mb-4" style={{ fontFamily: 'Playfair Display' }}>
-              {percentage === 100 ? 'Perfect Memory! 💖' : percentage >= 75 ? 'So close!' : 'Never Mind!'}
-            </h3>
-            <p className="text-lg text-gray-300 mb-8 font-medium">
-              You scored <span className="text-pink-400 font-extrabold">{score}</span> out of <span className="text-pink-400 font-extrabold">{questions.length}</span> correct answers!
-            </p>
-            <div className="w-full bg-white/10 rounded-full h-3 mb-8 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-1000"
-                style={{ width: `${percentage}%` }}
-              />
-            </div>
-
-            <div className="max-w-xs mx-auto text-left mb-8">
-              <label className="block text-[10px] uppercase font-bold tracking-widest text-pink-300 mb-2 pl-1">
-                Enter Your Name
-              </label>
-              <input
-                type="text"
-                placeholder="Enter your name..."
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                className="input-modern py-3.5 px-4 text-sm"
-              />
-            </div>
-
-            <div className="flex gap-4 max-w-xs mx-auto">
-              <button onClick={resetQuiz} className="flex-1 py-3.5 rounded-full border border-white/10 text-gray-300 hover:bg-white/5 transition-colors font-semibold">
-                Reset
-              </button>
-              <button
-                onClick={submitScore}
-                disabled={loading || !playerName.trim()}
-                className="flex-1 btn-primary py-3.5 rounded-full font-semibold disabled:opacity-50"
-              >
-                {loading ? 'Saving...' : 'Submit ✨'}
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="animate-scaleUp">
-            <div className="text-7xl mb-6">🏆✨</div>
-            <h3 className="text-3xl font-bold text-white mb-4" style={{ fontFamily: 'Playfair Display' }}>
-              Score Registered!
-            </h3>
-            <p className="text-sm text-gray-300 mb-8 max-w-xs mx-auto leading-relaxed">
-              Your score of <strong>{score}/{questions.length}</strong> was successfully published to the host as <strong>{playerName}</strong>!
-            </p>
-            <button onClick={resetQuiz} className="btn-primary px-10 py-3.5 rounded-full font-semibold">
-              Play Again 🔄
-            </button>
-          </div>
-        )}
+        <div className="text-7xl mb-6 animate-bounce">
+          {percentage === 100 ? '🏆' : percentage >= 75 ? '🎉' : '💪'}
+        </div>
+        <h3 className="text-3xl font-bold gradient-text mb-4" style={{ fontFamily: 'Playfair Display' }}>
+          {percentage === 100 ? 'Perfect Memory! 💖' : percentage >= 75 ? 'So close!' : 'Never Mind!'}
+        </h3>
+        <p className="text-lg text-gray-300 mb-6 font-medium">
+          You scored <span className="text-pink-400 font-extrabold">{score}</span> out of <span className="text-pink-400 font-extrabold">{questions.length}</span> correct answers!
+        </p>
+        <div className="w-full bg-white/10 rounded-full h-3 mb-8 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-1000"
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
+        <p className="text-sm text-green-400 font-bold bg-green-500/10 border border-green-500/20 py-3.5 px-6 rounded-2xl mb-8 flex items-center justify-center gap-2">
+          ✨ Score successfully registered under name: <span className="underline text-white font-extrabold">{finalName}</span>!
+        </p>
+        <button onClick={resetQuiz} className="btn-primary px-10 py-3.5 rounded-full font-semibold">
+          Play Again 🔄
+        </button>
       </div>
     );
   }
@@ -847,13 +859,15 @@ function VoiceMessage({ logActivity, onRecordStart }) {
   const [micError, setMicError] = useState(null);
   const [micLevel, setMicLevel] = useState(0);
 
-  const [senderName, setSenderName] = useState(localStorage.getItem('birthday-guest-name') || '');
+  const [savedName, setSavedName] = useState(localStorage.getItem('birthday-guest-name') || '');
 
-  // Sync saved name when audio URL loads
   useEffect(() => {
-    const savedName = localStorage.getItem('birthday-guest-name');
-    if (savedName) setSenderName(savedName);
-  }, [audioURL]);
+    const handleUpdate = () => {
+      setSavedName(localStorage.getItem('birthday-guest-name') || '');
+    };
+    window.addEventListener('guest-name-updated', handleUpdate);
+    return () => window.removeEventListener('guest-name-updated', handleUpdate);
+  }, []);
 
   const audioContextRef = useRef(null);
   const animationFrameRef = useRef(null);
@@ -944,11 +958,9 @@ function VoiceMessage({ logActivity, onRecordStart }) {
   };
 
   const saveVoiceMessage = () => {
-    if (recordedChunks.length === 0 || !senderName.trim()) return;
+    if (recordedChunks.length === 0) return;
+    const finalName = localStorage.getItem('birthday-guest-name') || savedName || 'Guest';
     setSaving(true);
-
-    // Save name globally so they don't have to retype it elsewhere!
-    localStorage.setItem('birthday-guest-name', senderName.trim());
 
     const blob = new Blob(recordedChunks, { type: recordedMime });
     const reader = new FileReader();
@@ -958,7 +970,7 @@ function VoiceMessage({ logActivity, onRecordStart }) {
       const existingVoiceNotes = JSON.parse(localStorage.getItem('birthday-voice-notes') || '[]');
       const newVoiceNote = {
         id: Date.now(),
-        name: senderName.trim(),
+        name: finalName.trim(),
         audio: base64data,
         date: new Date().toLocaleDateString(),
         time: new Date().toLocaleTimeString(),
@@ -987,13 +999,31 @@ function VoiceMessage({ logActivity, onRecordStart }) {
       }
 
       if (logActivity) {
-        logActivity('Recorded Voice Note', `Voice message from "${senderName.trim()}"`);
+        logActivity('Recorded Voice Note', `Voice message from "${finalName.trim()}"`);
       }
 
       setSaving(false);
       setSuccess(true);
     };
   };
+
+  if (!savedName) {
+    return (
+      <div className="glass-strong rounded-[40px] p-8 md:p-12 text-center max-w-lg mx-auto border border-white/10 shadow-2xl animate-scaleUp">
+        <div className="text-5xl mb-4 select-none">🔒</div>
+        <h3 className="text-xl font-bold text-white mb-2" style={{ fontFamily: 'Playfair Display' }}>Voice Messages are Locked</h3>
+        <p className="text-sm text-gray-400 mb-6 leading-relaxed">
+          Please enter your name in the **Memory Quiz** section first to unlock recording voice notes! 🧠✨
+        </p>
+        <a
+          href="#quiz"
+          className="inline-block bg-pink-500 text-white font-bold text-xs py-2.5 px-6 rounded-full hover:scale-105 active:scale-95 transition-all uppercase tracking-wider"
+        >
+          Go to Memory Quiz 🧠
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div className="glass-strong rounded-[40px] p-8 md:p-12 text-center max-w-lg mx-auto border border-white/10 shadow-2xl">
@@ -1015,24 +1045,13 @@ function VoiceMessage({ logActivity, onRecordStart }) {
         <div className="space-y-6 animate-scaleUp">
           <audio src={audioURL} controls className="mx-auto block" />
 
-          {!success && (
-            <div className="max-w-xs mx-auto text-left">
-              <label className="block text-[10px] uppercase font-bold tracking-widest text-pink-300 mb-2 pl-1">
-                Your Name
-              </label>
-              <input
-                type="text"
-                placeholder="Enter your name..."
-                value={senderName}
-                onChange={(e) => setSenderName(e.target.value)}
-                className="input-modern py-3 px-4 text-sm"
-              />
-            </div>
-          )}
+          <div className="p-3 bg-pink-500/10 border border-pink-500/20 rounded-2xl text-xs text-pink-300 font-bold tracking-wide max-w-xs mx-auto">
+            🎤 Recording as: <span className="text-white underline">{savedName}</span>
+          </div>
 
           <div className="flex gap-4 max-w-xs mx-auto">
             <button
-              onClick={() => { setAudioURL(null); setRecordedChunks([]); setSuccess(false); setSenderName(''); }}
+              onClick={() => { setAudioURL(null); setRecordedChunks([]); setSuccess(false); }}
               className="flex-1 py-3 rounded-full border border-white/10 text-gray-300 hover:bg-white/5 transition-colors font-semibold"
             >
               Re-record
@@ -1040,7 +1059,7 @@ function VoiceMessage({ logActivity, onRecordStart }) {
             {!success ? (
               <button
                 onClick={saveVoiceMessage}
-                disabled={saving || !senderName.trim()}
+                disabled={saving}
                 className="flex-1 btn-primary py-3 rounded-full font-semibold disabled:opacity-50"
               >
                 {saving ? 'Sending...' : 'Send voice ✨'}
