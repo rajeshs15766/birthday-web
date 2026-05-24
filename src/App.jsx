@@ -526,9 +526,6 @@ function WishesWall({ logActivity }) {
             <h3 className="text-3xl font-extrabold text-white tracking-wide" style={{ fontFamily: 'Playfair Display' }}>
               Secret Wish Drop-Box
             </h3>
-            <p className="text-xs text-gray-400 mt-2.5 leading-relaxed font-medium">
-              To keep your message a beautiful mystery and completely secure, your wish is immediately encrypted and dropped directly into the creator's private dashboard. No one else can ever view it! ✨
-            </p>
           </div>
 
           <div className="space-y-4 relative z-10">
@@ -1089,6 +1086,10 @@ function ScratchCard({ message, logActivity }) {
   const canvasRef = useRef(null);
   const [revealed, setRevealed] = useState(false);
   const [isScratching, setIsScratching] = useState(false);
+
+  useEffect(() => {
+    setRevealed(false);
+  }, [message]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1690,6 +1691,15 @@ function WebsiteContent({ setViewMode }) {
       if (sp) setPhotos(JSON.parse(sp));
       const sq = localStorage.getItem('birthday-quiz-questions');
       if (sq) setQuizQuestions(JSON.parse(sq));
+      
+      const savedPass = localStorage.getItem('custom-gateway-pass');
+      if (savedPass) setGatewayPass(savedPass);
+
+      const savedTypewriter = localStorage.getItem('custom-typewriter');
+      if (savedTypewriter) setTypewriterStoryText(savedTypewriter);
+
+      const savedScratch = localStorage.getItem('custom-scratch');
+      if (savedScratch) setScratchCardSecret(savedScratch);
     };
 
     if (sUrl && sKey) {
@@ -1994,9 +2004,9 @@ function WebsiteContent({ setViewMode }) {
         <FloatingHearts />
 
         <div className="relative z-10 w-full max-w-xl mx-auto flex flex-col items-center">
-          <div className="fadeIn stagger-1">
+          <div className="fadeIn stagger-1 text-center">
             <h1
-              className="text-5xl md:text-6xl mb-6 text-white font-extrabold glow leading-tight"
+              className="text-5xl md:text-6xl mb-6 text-white font-extrabold glow leading-tight text-center"
               style={{ fontFamily: 'Playfair Display' }}
             >
               Make A Wish ✨
@@ -2007,7 +2017,7 @@ function WebsiteContent({ setViewMode }) {
             <InteractiveCake onAllBlown={handleBlowCandle} />
           </div>
 
-          <p className="text-lg md:text-xl text-gray-300 max-w-md mx-auto mb-8 font-medium leading-relaxed fadeIn stagger-3">
+          <p className="text-lg md:text-xl text-gray-300 max-w-md mx-auto mb-8 font-medium leading-relaxed fadeIn stagger-3 text-center">
             Close your eyes, make a silent wish, and blow into your microphone! 🎤
           </p>
 
@@ -2119,30 +2129,7 @@ function WebsiteContent({ setViewMode }) {
         </div>
       </section>
 
-      {/* STATS COUNT */}
-      <section
-        id="stats"
-        data-animate
-        className={`py-20 md:py-28 px-4 ${visibleSections.stats ? 'fadeIn' : 'opacity-0'}`}
-      >
-        <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            {[
-              { value: 4, label: 'Years of Friendship', suffix: '+' },
-              { value: 1000, label: 'Messages Exchanged', suffix: '+' },
-              { value: 100, label: 'Overthinking Handled', suffix: '%' },
-              { value: 1, label: 'Irreplaceable Friend', suffix: '' }
-            ].map((stat, i) => (
-              <div key={i} className="glass-strong rounded-3xl p-5 md:p-8 text-center card-hover border border-white/5">
-                <div className="text-3xl md:text-5xl font-extrabold gradient-text mb-3">
-                  {visibleSections.stats && <AnimatedNumber value={stat.value} />}{stat.suffix}
-                </div>
-                <div className="text-gray-400 text-xs md:text-sm font-semibold tracking-wide">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+
 
       {/* MEMORY PHOTO GALLERY */}
       <section
@@ -2154,7 +2141,7 @@ function WebsiteContent({ setViewMode }) {
           <div className="text-center mb-10">
             <p className="text-pink-400 text-xs font-extrabold tracking-[5px] uppercase mb-3">Memory Lane</p>
             <h2 className="text-4xl md:text-5xl font-bold text-white tracking-wide" style={{ fontFamily: 'Playfair Display' }}>
-              Our Moments Together 📸
+              Moments Together 📸
             </h2>
             <p className="text-gray-400 text-xs md:text-sm mt-3 font-semibold uppercase tracking-wider">Drag/swipe horizontal • Double click card to love</p>
           </div>
@@ -2231,9 +2218,8 @@ function WebsiteContent({ setViewMode }) {
       >
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <p className="text-pink-400 text-xs font-extrabold tracking-[5px] uppercase mb-3">Confidential Dossier</p>
             <h2 className="text-4xl md:text-5xl font-bold text-white tracking-wide" style={{ fontFamily: 'Playfair Display' }}>
-              Rekodaaaa.exe ❤️
+              Rekodaaaa ❤️
             </h2>
             <p className="text-red-400 text-sm font-semibold uppercase tracking-widest mt-4 flex items-center justify-center gap-2">
               <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></span> Warning: High Emotional Attachment Level
