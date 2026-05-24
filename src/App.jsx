@@ -1658,6 +1658,7 @@ function WebsiteContent({ setViewMode }) {
   const [gatewayPass, setGatewayPass] = useState('rekodaaaaa');
   const [typewriterStoryText, setTypewriterStoryText] = useState("Some people become important slowly... and before you realize it, they become part of your life forever ✨");
   const [scratchCardSecret, setScratchCardSecret] = useState("You're not just a friend — you're family I chose 💖");
+  const [photos, setPhotos] = useState(galleryPhotos);
 
   const audioRef = useRef(null);
 
@@ -1671,6 +1672,15 @@ function WebsiteContent({ setViewMode }) {
 
     const savedScratch = localStorage.getItem('custom-scratch');
     if (savedScratch) setScratchCardSecret(savedScratch);
+
+    const loadPhotos = () => {
+      const savedPhotos = localStorage.getItem('birthday-gallery-photos');
+      if (savedPhotos) setPhotos(JSON.parse(savedPhotos));
+    };
+    loadPhotos();
+
+    window.addEventListener('birthday-gallery-updated', loadPhotos);
+    return () => window.removeEventListener('birthday-gallery-updated', loadPhotos);
   }, []);
 
   // Set soft audio volume and track ref
@@ -2095,7 +2105,7 @@ function WebsiteContent({ setViewMode }) {
             <p className="text-gray-400 text-xs md:text-sm mt-3 font-semibold uppercase tracking-wider">Drag/swipe horizontal • Double click card to love</p>
           </div>
 
-          <PhotoGallery photos={galleryPhotos} />
+          <PhotoGallery photos={photos} />
         </div>
       </section>
 
@@ -2405,6 +2415,9 @@ function CreatorDashboard({ setViewMode }) {
   const [supabaseKey, setSupabaseKey] = useState('');
   const [saveStatus, setSaveStatus] = useState('');
 
+  const [customPhotos, setCustomPhotos] = useState([]);
+  const [newPhoto, setNewPhoto] = useState({ src: '', caption: '', date: '' });
+
   const loadDashboardData = useCallback(() => {
     // 1. Wishes Local
     const savedWishes = JSON.parse(localStorage.getItem('birthday-wishes') || '[]');
@@ -2421,6 +2434,10 @@ function CreatorDashboard({ setViewMode }) {
     // 4. Activity Logs Local
     const savedLogs = JSON.parse(localStorage.getItem('birthday-activity') || '[]');
     setActivityLogs(savedLogs);
+
+    // 5. Memory Gallery Photos Local
+    const savedPhotos = JSON.parse(localStorage.getItem('birthday-gallery-photos') || '[]');
+    setCustomPhotos(savedPhotos.length > 0 ? savedPhotos : galleryPhotos);
 
     // Customize states
     setCustomPass(localStorage.getItem('custom-gateway-pass') || 'rekodaaaaa');
@@ -2532,6 +2549,27 @@ function CreatorDashboard({ setViewMode }) {
         }
       }).catch(err => console.error("Cloud deletion failed:", err));
     }
+  };
+
+  const addCustomPhoto = () => {
+    if (!newPhoto.src.trim() || !newPhoto.caption.trim() || !newPhoto.date.trim()) return;
+    const updated = [...customPhotos, {
+      src: newPhoto.src.trim(),
+      caption: newPhoto.caption.trim(),
+      date: newPhoto.date.trim()
+    }];
+    setCustomPhotos(updated);
+    localStorage.setItem('birthday-gallery-photos', JSON.stringify(updated));
+    setNewPhoto({ src: '', caption: '', date: '' });
+    window.dispatchEvent(new Event('birthday-gallery-updated'));
+  };
+
+  const deleteCustomPhoto = (index) => {
+    if (!window.confirm("Are you sure you want to remove this photo from the gallery?")) return;
+    const updated = customPhotos.filter((_, i) => i !== index);
+    setCustomPhotos(updated);
+    localStorage.setItem('birthday-gallery-photos', JSON.stringify(updated));
+    window.dispatchEvent(new Event('birthday-gallery-updated'));
   };
 
   const saveCustomSettings = () => {
@@ -2897,6 +2935,94 @@ function CreatorDashboard({ setViewMode }) {
                   className="input-modern h-28 resize-none"
                   placeholder="Enter custom love note for typewriter..."
                 />
+              </div>
+
+              {/* MEMORY GALLERY PHOTOS CUSTOMIZER */}
+              <div className="pt-6 border-t border-white/5 space-y-6">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-lg font-bold text-pink-300 tracking-wide">Memory Gallery Photos Manager 📸</h4>
+                  <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Dynamic album photos</span>
+                </div>
+
+                {/* Add Photo Form */}
+                <div className="glass-strong rounded-3xl p-5 border border-white/5 space-y-4">
+                  <span className="text-xs font-bold text-gray-300 uppercase tracking-widest block">Add New Moment</span>
+                  
+                  <div className="grid sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-widest mb-1.5 pl-1">Image URL / Path</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. /photo1.jpg or HTTPS link"
+                        value={newPhoto.src}
+                        onChange={(e) => setNewPhoto(prev => ({ ...prev, src: e.target.value }))}
+                        className="input-modern py-2.5 px-4 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-widest mb-1.5 pl-1">Caption</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Beach Day Memories"
+                        value={newPhoto.caption}
+                        onChange={(e) => setNewPhoto(prev => ({ ...prev, caption: e.target.value }))}
+                        className="input-modern py-2.5 px-4 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-400 font-semibold text-[10px] uppercase tracking-widest mb-1.5 pl-1">Year / Date</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="e.g. 2023"
+                          value={newPhoto.date}
+                          onChange={(e) => setNewPhoto(prev => ({ ...prev, date: e.target.value }))}
+                          className="input-modern py-2.5 px-4 text-xs flex-1"
+                        />
+                        <button
+                          onClick={addCustomPhoto}
+                          disabled={!newPhoto.src.trim() || !newPhoto.caption.trim() || !newPhoto.date.trim()}
+                          className="bg-pink-500 hover:bg-pink-600 disabled:opacity-50 text-white font-extrabold text-xs px-4 rounded-xl transition-all shadow-md shadow-pink-500/20 whitespace-nowrap"
+                        >
+                          + Add Moment
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-gray-500 pl-1">
+                    💡 <strong>Tip:</strong> You can place files inside the <code>public/</code> folder of the code and reference them (e.g. <code>/myphoto.jpg</code>) or use external image links from Imgur or other image hosting sites.
+                  </p>
+                </div>
+
+                {/* Photos List grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 max-h-[300px] overflow-y-auto pr-1 scrollbar-hide">
+                  {customPhotos.map((photo, index) => (
+                    <div key={index} className="glass rounded-2xl p-3 border border-white/5 flex flex-col justify-between group relative overflow-hidden">
+                      <div className="w-full h-28 rounded-xl overflow-hidden bg-black/40 border border-white/5 relative">
+                        <img
+                          src={photo.src}
+                          alt={photo.caption}
+                          className="w-full h-full object-cover rounded-xl"
+                          onError={(e) => {
+                            e.target.src = "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=300&auto=format&fit=crop&q=80";
+                          }}
+                        />
+                      </div>
+                      <div className="mt-2 text-left">
+                        <span className="text-[9px] font-bold text-pink-400 bg-pink-500/10 px-2 py-0.5 rounded-full">{photo.date}</span>
+                        <p className="text-xs text-white font-bold truncate mt-1.5">{photo.caption}</p>
+                      </div>
+
+                      <button
+                        onClick={() => deleteCustomPhoto(index)}
+                        className="absolute top-2 right-2 bg-red-500/80 hover:bg-red-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity font-bold"
+                        title="Remove photo"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="flex justify-between items-center pt-4 border-t border-white/5">
